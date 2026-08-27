@@ -46,9 +46,34 @@ write at once.
 
 A server would add nothing but a point of failure.
 
+## Documents
+
+Written in Russian; the short English summary of each is in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md), both of
+which open with an English note.
+
+| | |
+|---|---|
+| [`docs/spec.md`](docs/spec.md) | what is measured, how the remainder follows from it, what the project does not promise |
+| [`docs/storage-setup.md`](docs/storage-setup.md) | preparing the private storage before the first sample |
+| [`docs/roles.md`](docs/roles.md) | roles: when each engages and what it may block |
+| [`docs/labels.md`](docs/labels.md) | label nomenclature |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | invariants, gates, labels, language |
+| [`SECURITY.md`](SECURITY.md) | what is collected, where it goes, how to report a leak |
+| [`HISTORY.md`](HISTORY.md) | why the project exists and which decisions are settled |
+
 ## Status
 
-Early development. Specification: [`docs/spec.md`](docs/spec.md) (Russian).
+Early development: **the problem statement and the rules are written down, the
+code is not.** Order of work: epics
+[#1](https://github.com/ArtVsMark/claude-code-usage/issues/1) (sample → report
+→ calibrate) and
+[#3](https://github.com/ArtVsMark/claude-code-usage/issues/3) (pre-launch
+infrastructure).
+
+The tool will not report a percentage until it has collected calibration
+points; until then it says "the scale is not calibrated". That is the intended
+behaviour, not a missing feature.
 
 ## License
 
