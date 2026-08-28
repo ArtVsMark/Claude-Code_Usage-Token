@@ -1,0 +1,93 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# Имя дистрибутива решено в #19 и после публикации не переигрывается.
+# Оба очевидных имени заняты на PyPI посторонними пакетами, причём
+# `claude-code-usage` — однопредметным (счётчик расхода Claude Code).
+name = "claude-code-usage-meter"
+# Проект не выпускался ни разу. Ноль здесь — факт, а не заглушка.
+version = "0.0.0"
+description = "Измеряет расход лимитов Claude Code и выводит остаток по калиброванной шкале"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "ArtVsMark" }]
+keywords = ["claude-code", "usage", "rate-limit", "metering"]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Natural Language :: Russian",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/ArtVsMark/claude-code-usage"
+Issues = "https://github.com/ArtVsMark/claude-code-usage/issues"
+
+[project.scripts]
+# Имя команды из #19. Цель обязана существовать: несуществующая точка входа
+# ломается не при установке, а при первом запуске у чужого человека.
+claude-code-usage-meter = "claude_code_usage.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claude_code_usage"]
+
+# ── ruff ──────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+# RUF001–RUF003 сообщают о «неоднозначных» символах Unicode — тех кириллических
+# буквах, которые начертанием совпадают с латинскими (а, е, о, р, с, х…).
+# Внутренний язык проекта русский по CLAUDE.md: строки, docstring'и, комментарии
+# и тексты ошибок пишутся кириллицей. Без этой оговорки линтер столкнулся бы с
+# правилом про язык в первый же день и выдал бы сотни ложных срабатываний.
+#
+# Оговорка узкая намеренно: гасятся ровно три правила про начертание, а не
+# набор RUF целиком.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+# В тестах допускается assert и длинные имена проверок.
+"tests/*" = ["S101"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+# ── mypy ──────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+files = ["src", "tests"]
+strict = true
+# Строгость без этих трёх — строгость на словах: они и ловят молчаливое «Any».
+warn_unreachable = true
+warn_no_return = true
+disallow_any_generics = true
+pretty = true
+
+# ── pytest ────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# src-раскладка без установки пакета: гейт обязан работать в свежем клоне,
+# иначе «тесты зелёные» будет означать «пакет не найден».
+pythonpath = ["src"]
+addopts = "-q --strict-markers --strict-config"
+xfail_strict = true
