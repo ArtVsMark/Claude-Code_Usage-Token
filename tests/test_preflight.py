@@ -193,3 +193,38 @@ def test_охват_попадает_в_вывод(
     assert результат.findings == []
     assert результат.examined == 1
     assert результат.skipped == 1
+
+
+def test_потоки_переводятся_в_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Отчёт обязан оставаться читаемым при узкой кодировке потока.
+
+    На Windows кодировка берётся из локали и UTF-8 не является. Падения нет:
+    поток заменяет непредставимое молча — и команда, смысл которой в том, чтобы
+    **назвать** отказавшее, перестаёт называть что-либо, оставаясь формально
+    работающей. Это хуже отказа: отказ виден.
+    """
+    import io
+
+    узкий_вывод = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    узкий_отказ = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    monkeypatch.setattr("sys.stdout", узкий_вывод)
+    monkeypatch.setattr("sys.stderr", узкий_отказ)
+
+    preflight.force_utf8_output()
+
+    assert узкий_вывод.encoding == "utf-8"
+    assert узкий_отказ.encoding == "utf-8"
+
+
+def test_перевод_потоков_переживает_подменённый_поток(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Поток без `reconfigure` не должен ронять команду.
+
+    Под перехватом вывода (pytest, некоторые обёртки CI) `sys.stdout` — не
+    файловый поток, и метода у него нет. Падать из-за этого нельзя: проверки
+    важнее кодировки.
+    """
+    monkeypatch.setattr("sys.stdout", object())
+    monkeypatch.setattr("sys.stderr", object())
+    preflight.force_utf8_output()

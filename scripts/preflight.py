@@ -197,6 +197,26 @@ def report(passed: Sequence[str], failed: Sequence[tuple[str, str]]) -> str:
     )
 
 
+def force_utf8_output() -> None:
+    """Заставить свои потоки говорить UTF-8.
+
+    Вывод здесь русский, а кодировка потока по умолчанию берётся из локали. На
+    Windows это не UTF-8, и отчёт выходит нечитаемым: ``\\u0442\\u0435...``
+    вместо «тесты» либо мойибаке. Падения при этом нет — потоки заменяют
+    непредставимое молча, — и в том вся неприятность: команда, смысл которой в
+    том, чтобы **назвать** отказавшее, перестаёт называть что-либо, оставаясь
+    формально работающей.
+
+    Чинится в инструменте, а не переменной окружения в CI: иначе прогон в
+    облаке стал бы читаемым, а окно, в котором работают руками, осталось бы
+    слепым — ровно та слепая зона, о которой предупреждает роль 🔧 Разработчика.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Прогнать всё и вернуть ненулевой код, если хоть что-то не прошло."""
     if argv:
@@ -244,4 +264,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    force_utf8_output()
     raise SystemExit(main(sys.argv[1:]))
