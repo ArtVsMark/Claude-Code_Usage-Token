@@ -228,3 +228,32 @@ def test_перевод_потоков_переживает_подменённы
     monkeypatch.setattr("sys.stdout", object())
     monkeypatch.setattr("sys.stderr", object())
     preflight.force_utf8_output()
+
+
+def test_кириллица_доходит_до_узкого_потока_читаемой(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Проверка читаемости, выполняемая **на той самой ОС**, где риск.
+
+    Заменяет чтение лога прогона: логи заданий отдаются с хоста, закрытого
+    политикой прокси, а этот тест едет в каждой ячейке матрицы, включая три
+    ячейки Windows, и проверяет то же самое надёжнее — байтами, а не глазами.
+
+    Без `force_utf8_output` запись кириллицы в поток с узкой кодировкой
+    падает с `UnicodeEncodeError`, поэтому тест обязан упасть, если правку
+    снимут.
+    """
+    import io
+
+    буфер = io.BytesIO()
+    поток = io.TextIOWrapper(буфер, encoding="ascii")
+    monkeypatch.setattr("sys.stdout", поток)
+    monkeypatch.setattr("sys.stderr", поток)
+
+    preflight.force_utf8_output()
+
+    строка = "✗ тесты (весь набор) — не прошло"
+    поток.write(строка)
+    поток.flush()
+
+    assert буфер.getvalue().decode("utf-8") == строка
