@@ -236,7 +236,9 @@
       "status": "unreviewed"
     },
     "077": {
-      "status": "unreviewed"
+      "status": "active",
+      "mechanism": "gate",
+      "where": "scripts/preflight.py — compare_showcases: отдельная проверка свойств текста (кириллица в английской витрине) плюс сверка структуры заголовков. Замечанием, а не отказом: расхождение витрин — состояние документации."
     },
     "078": {
       "status": "unreviewed"
