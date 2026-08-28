@@ -49,7 +49,7 @@ packages = ["src/claude_code_usage"]
 # ── ruff ──────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 88
-src = ["src", "tests"]
+src = ["src", "tests", "scripts"]
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -75,7 +75,7 @@ docstring-code-format = true
 [tool.mypy]
 python_version = "3.11"
 mypy_path = "src"
-files = ["src", "tests"]
+files = ["src", "tests", "scripts"]
 strict = true
 # Строгость без этих трёх — строгость на словах: они и ловят молчаливое «Any».
 warn_unreachable = true
@@ -88,6 +88,6 @@ pretty = true
 testpaths = ["tests"]
 # src-раскладка без установки пакета: гейт обязан работать в свежем клоне,
 # иначе «тесты зелёные» будет означать «пакет не найден».
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]
 addopts = "-q --strict-markers --strict-config"
 xfail_strict = true
