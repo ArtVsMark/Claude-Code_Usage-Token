@@ -162,6 +162,61 @@ def scan_for_secrets(paths: Iterable[Path]) -> ScanResult:
     return ScanResult(findings=findings, examined=examined, skipped=skipped)
 
 
+# ── паритет витрин ────────────────────────────────────────────────────────
+
+#: Русская витрина — источник истины, английская — перевод. Расхождение между
+#: ними это **ошибка перевода, а не два разных утверждения** (CLAUDE.md).
+SHOWCASE_RU = "README.md"
+SHOWCASE_EN = "README.en.md"
+
+_CYRILLIC = re.compile("[\u0400-\u04ff]")
+_HEADING = re.compile(r"^(#{1,6}) ")
+
+#: Ссылка-переключатель на другую витрину — единственное место, где название
+#: чужого языка стоит на этом языке законно: «Русская версия» в английском
+#: документе это не непереведённый кусок, а подпись к ссылке. Без этого
+#: исключения проверка краснела бы на правильной строке — и её выключили бы
+#: первой же правкой, вместе со всем остальным, что она ловит.
+_LANG_SWITCH = re.compile(r"\[[^\]]*\]\(" + re.escape(SHOWCASE_RU) + r"\)")
+
+
+def compare_showcases(root: Path) -> list[str]:
+    """Сверить витрины и вернуть **предупреждения**, а не отказы.
+
+    Расхождение витрин — состояние документации, а не дефект кода: оно не
+    ломает поведение и не должно останавливать коммит. Но и молчать о нём
+    нельзя, иначе заявление «витрина на двух языках» держится обещанием.
+
+    Чего проверка **не** ловит: смысловое расхождение при формально верном
+    переводе. Совпадение ключей — ещё не перевод; это остаётся за чтением.
+    """
+    ru_path, en_path = root / SHOWCASE_RU, root / SHOWCASE_EN
+    if not (ru_path.is_file() and en_path.is_file()):
+        return [f"витрин нет обеих: {SHOWCASE_RU} и {SHOWCASE_EN} — сверять нечего"]
+
+    ru = ru_path.read_text(encoding="utf-8").splitlines()
+    en = en_path.read_text(encoding="utf-8").splitlines()
+    warnings: list[str] = []
+
+    for number, line in enumerate(en, 1):
+        if _CYRILLIC.search(_LANG_SWITCH.sub("", line)):
+            warnings.append(
+                f"{SHOWCASE_EN}:{number}: кириллица в английской витрине — "
+                f"«{line.strip()[:60]}»"
+            )
+
+    ru_levels = [len(m.group(1)) for m in map(_HEADING.match, ru) if m]
+    en_levels = [len(m.group(1)) for m in map(_HEADING.match, en) if m]
+    if ru_levels != en_levels:
+        warnings.append(
+            f"структура заголовков разъехалась: в {SHOWCASE_RU} "
+            f"{len(ru_levels)} ({ru_levels}), в {SHOWCASE_EN} "
+            f"{len(en_levels)} ({en_levels})"
+        )
+
+    return warnings
+
+
 # ── прогон ────────────────────────────────────────────────────────────────
 
 
@@ -178,13 +233,24 @@ def run_check(check: Check) -> tuple[bool, str]:
     return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
 
 
-def report(passed: Sequence[str], failed: Sequence[tuple[str, str]]) -> str:
-    """Собрать итог так, чтобы он называл отказавшее по имени."""
+def report(
+    passed: Sequence[str],
+    failed: Sequence[tuple[str, str]],
+    warned: Sequence[str] = (),
+) -> str:
+    """Собрать итог так, чтобы он называл отказавшее по имени.
+
+    Предупреждения печатаются знаком ``~`` и **не влияют на код возврата**:
+    смешать их с отказами значило бы либо останавливать коммит из-за состояния
+    документации, либо приучить пропускать красное.
+    """
     lines = [f"  ✓ {name}" for name in passed]
+    lines += [f"  ~ {name}" for name in warned]
     lines += [f"  ✗ {name}" for name, _ in failed]
 
+    хвост = f" · замечаний {len(warned)}" if warned else ""
     if not failed:
-        return "\n".join([*lines, "", f"всё чисто: проверок {len(passed)}"])
+        return "\n".join([*lines, "", f"всё чисто: проверок {len(passed)}{хвост}"])
 
     names = ", ".join(name for name, _ in failed)
     return "\n".join(
@@ -192,7 +258,8 @@ def report(passed: Sequence[str], failed: Sequence[tuple[str, str]]) -> str:
             *lines,
             "",
             f"не прошло: {names}",
-            f"(проверок всего {len(passed) + len(failed)}, отказов {len(failed)})",
+            f"(проверок всего {len(passed) + len(failed)}, "
+            f"отказов {len(failed)}{хвост})",
         ]
     )
 
@@ -208,6 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     passed: list[str] = []
     failed: list[tuple[str, str]] = []
+    warned: list[str] = []
 
     for check in checks():
         ok, output = run_check(check)
@@ -224,6 +292,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return EXIT_BROKEN
 
+    показания = compare_showcases(ROOT)
+    имя_витрин = "паритет витрин"
+    if показания:
+        warned.append(f"{имя_витрин}: расхождений {len(показания)}")
+    else:
+        passed.append(имя_витрин)
+
     name = (
         f"секреты и замеры в диффе "
         f"(просмотрено {scan.examined}, пропущено двоичных {scan.skipped})"
@@ -233,13 +308,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         passed.append(name)
 
+    if показания:
+        print(
+            f"── {имя_витрин} (замечания, на код возврата не влияют) ──",
+            file=sys.stderr,
+        )
+        for показание in показания:
+            print(f"  {показание}", file=sys.stderr)
+        print(file=sys.stderr)
+
     for failed_name, output in failed:
         print(f"── {failed_name} ──", file=sys.stderr)
         if output:
             print(output, file=sys.stderr)
         print(file=sys.stderr)
 
-    print(report(passed, failed), file=sys.stderr)
+    print(report(passed, failed, warned), file=sys.stderr)
     return EXIT_FAILED if failed else 0
 
 
