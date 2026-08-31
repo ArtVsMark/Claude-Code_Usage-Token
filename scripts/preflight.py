@@ -288,18 +288,31 @@ class ShowcaseContract:
     named: int
 
 
-def project_version(root: Path) -> str:
-    """Версия проекта из ``pyproject.toml`` — единственный источник для значка.
+#: Строка объявления версии — та же форма, которую читает сборка.
+_VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILINE)
 
-    Не из ``claude_code_usage.__version__``: тот сверяется с метаданными
-    отдельным тестом, и брать значение оттуда значило бы завести третье место,
-    где живёт одна и та же версия.
+
+def project_version(root: Path) -> str:
+    """Версия проекта из единственного источника, названного в ``pyproject.toml``.
+
+    Раньше бралась прямо из ``[project] version``. После #12 версия объявлена
+    там динамической, и значок стало не с чем сверять — гейт заметил это тем же
+    прогоном, что и всё остальное. Ровно та работа, ради которой он заведён.
+
+    Путь к источнику **не задаётся здесь константой**: он читается из
+    ``[tool.hatch.version] path``. Иначе одно и то же знание — «где живёт
+    версия» — лежало бы в двух местах, и переезд источника разошёлся бы с
+    гейтом молча.
     """
     with (root / "pyproject.toml").open("rb") as fh:
-        version = tomllib.load(fh)["project"]["version"]
-    if not isinstance(version, str):
-        raise TypeError(f"версия в pyproject.toml не строка: {version!r}")
-    return version
+        путь = tomllib.load(fh)["tool"]["hatch"]["version"]["path"]
+    if not isinstance(путь, str):
+        raise TypeError(f"путь к версии в pyproject.toml не строка: {путь!r}")
+
+    совпадение = _VERSION_RE.search((root / путь).read_text(encoding="utf-8"))
+    if совпадение is None:
+        raise ValueError(f'в {путь} нет строки __version__ = "…"')
+    return совпадение.group(1)
 
 
 def expected_badge(qid: str, root: Path) -> dict[str, object] | None:

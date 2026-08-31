@@ -7,8 +7,11 @@ build-backend = "hatchling.build"
 # Оба очевидных имени заняты на PyPI посторонними пакетами, причём
 # `claude-code-usage` — однопредметным (счётчик расхода Claude Code).
 name = "claude-code-usage-meter"
-# Проект не выпускался ни разу. Ноль здесь — факт, а не заглушка.
-version = "0.0.0"
+# Версия живёт в ОДНОМ месте — `src/claude_code_usage/__init__.py`, — а сюда
+# приходит оттуда. Раньше она стояла в двух файлах и держалась тестом: тест
+# ловит расхождение, но не мешает ему появиться, а править две строки вместо
+# одной приходится при каждом выпуске.
+dynamic = ["version"]
 description = "Измеряет расход лимитов Claude Code и выводит остаток по калиброванной шкале"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -42,6 +45,12 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+
+[tool.hatch.version]
+# Единственный источник версии. Тег выпуска сверяется с ним гейтом
+# `scripts/release.py`: расхождение между тем, что объявлено, и тем, что
+# опубликовано, обнаруживается уже у того, кто поставил пакет.
+path = "src/claude_code_usage/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/claude_code_usage"]
