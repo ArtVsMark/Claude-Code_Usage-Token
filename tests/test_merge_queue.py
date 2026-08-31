@@ -29,6 +29,7 @@ def _pull(номер: int, **поля: Any) -> dict[str, Any]:
         "body": "Closes #1",
         "labels": [{"name": "area/ci"}, {"name": "enhancement"}],
         "head": {"sha": f"sha{номер}", "repo": {"fork": False}},
+        "base": {"ref": "main", "sha": "base-sha"},
     }
     основа.update(поля)
     return основа
@@ -129,11 +130,14 @@ class ФейковаяПлощадка:
         *,
         main_busy: bool = False,
         main_red: bool = False,
+        behind_by: int = 0,
     ) -> None:
         self.pulls = {p["number"]: p for p in pulls}
         self.main_busy = main_busy
         self.main_red = main_red
+        self.behind_by = behind_by
         self.записи: list[tuple[str, str]] = []
+        self.сравнения: list[str] = []
 
     def request(
         self, method: str, path: str, *, body: Any = None, params: Any = None
@@ -161,6 +165,9 @@ class ФейковаяПлощадка:
                 }
             )
             return {"workflow_runs": прогоны}
+        if "/compare/" in path:
+            self.сравнения.append(path)
+            return {"behind_by": self.behind_by, "ahead_by": 1}
         if path.endswith("/check-runs"):
             return {
                 "check_runs": [
@@ -306,3 +313,28 @@ def test_без_токена_прогон_предупреждает_а_не_п�
 
     assert merge_queue.main([]) == 0
     assert "::warning::" in capsys.readouterr().out
+
+
+def test_отставание_считается_сравнением_с_веткой(площадка: Any) -> None:
+    """Сравнивается имя ветки, а не `base.sha`.
+
+    `base.sha` — состояние базы на момент открытия PR, и сравнение с ним всегда
+    дало бы ноль: PR по определению основан на нём. Отставание считается от
+    того, где общая ветка сейчас.
+    """
+    двойник = площадка(pulls=[_pull(1)], behind_by=2)
+
+    merge_queue.run("o/r", "main", dry=True)
+
+    assert двойник.сравнения == ["/repos/o/r/compare/main...sha1"]
+
+
+def test_отставший_pr_не_мержится_даже_если_clean(площадка: Any) -> None:
+    """Живой дефект: без защиты ветки площадка отдаёт `clean` для отставшего PR."""
+    двойник = площадка(pulls=[_pull(1, mergeable_state="clean")], behind_by=1)
+
+    merge_queue.run("o/r", "main", dry=False)
+
+    пути = [путь for _, путь in двойник.записи]
+    assert "/repos/o/r/pulls/1/update-branch" in пути
+    assert _мержи(двойник) == []
