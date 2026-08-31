@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,14 @@ def test_версия_объявлена_один_раз() -> None:
     assert _pyproject()["tool"]["hatch"]["version"]["path"] == (
         "src/claude_code_usage/__init__.py"
     )
-    assert claude_code_usage.__version__ == "0.0.0"
+    # Литерала версии здесь нет намеренно. Он был — и оказался ТРЕТЬИМ местом,
+    # где она живёт: правка версии роняла тест, который называется «версия
+    # объявлена один раз». Проверяется форма, а совпадение с источником —
+    # гейтом витрины, которому есть с чем сверять.
+    assert re.fullmatch(r"\d+\.\d+\.\d+", claude_code_usage.__version__), (
+        f"версия {claude_code_usage.__version__!r} не вида X.Y.Z — "
+        "тег выпуска строго такой, и разойтись они не должны"
+    )
 
 
 def test_имя_дистрибутива_то_самое() -> None:
