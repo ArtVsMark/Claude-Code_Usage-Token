@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +19,9 @@ import merge_queue
 import pr_ready
 
 ЭТАЛОН = frozenset({"гейты"})
+
+
+WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 
 
 def _pull(номер: int, **поля: Any) -> dict[str, Any]:
@@ -382,3 +387,41 @@ def test_эталон_берётся_из_прогона_ci_а_не_из_ком�
 
     пути = [путь for _, путь in двойник.записи]
     assert not пути, "чтение состояния ничего не меняет"
+
+
+# ── очередь просыпается вовремя ───────────────────────────────────────────
+
+
+def _имя_workflow(путь: Path) -> str:
+    совпадение = re.search(r"^name: (.+)$", путь.read_text(encoding="utf-8"), re.M)
+    assert совпадение, f"{путь.name}: у workflow нет имени"
+    return совпадение.group(1).strip()
+
+
+def _будильники_очереди() -> set[str]:
+    """Имена workflow, от завершения которых очередь просыпается."""
+    текст = (WORKFLOWS / "merge-queue.yml").read_text(encoding="utf-8")
+    блок = re.search(r"^    workflows:\n((?:      - .+\n)+)", текст, re.M)
+    assert блок, "в merge-queue.yml не нашёлся список workflows"
+    return {с.strip()[2:].strip() for с in блок.group(1).splitlines()}
+
+
+def test_очередь_просыпается_от_всех_проверок_pr() -> None:
+    """Список будильников сверяется с деревом, а не ведётся вниманием.
+
+    Последним на pull request зеленеет не `ci`, а обязательная проверка: она
+    ждёт всех остальных по построению. Пока в списке стояло одно имя, момент
+    готовности PR очередь не видела никогда — PR #41 простоял 50 минут при
+    нуле обходов.
+
+    Расхождение опасно в обе стороны: недостающее имя возвращает тот же
+    простой, лишнее — обходы на событие, которое готовности не меняет.
+    """
+    по_pull_request = {
+        _имя_workflow(путь)
+        for путь in sorted(WORKFLOWS.glob("*.yml"))
+        if re.search(r"^  pull_request:", путь.read_text(encoding="utf-8"), re.M)
+    }
+
+    assert по_pull_request, "не нашлось ни одного workflow, ходящего по pull_request"
+    assert _будильники_очереди() == по_pull_request
