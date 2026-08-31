@@ -180,7 +180,15 @@ def _со_значком(
     }
     показ = "Значок: version.json\n"
     _контракт(каталог, [ПРОБЕЛ, объявление], _ВИТРИНА_RU + показ, _ВИТРИНА_EN + показ)
-    _файл(каталог, "pyproject.toml", f'[project]\nversion = "{версия}"\n')
+    # Путь к источнику версии гейт читает из pyproject, а саму версию — из
+    # названного файла. Двух мест, где лежит одно знание, здесь быть не должно.
+    _файл(
+        каталог,
+        "pyproject.toml",
+        '[project]\ndynamic = ["version"]\n\n'
+        '[tool.hatch.version]\npath = "src/pkg/__init__.py"\n',
+    )
+    _файл(каталог, "src/pkg/__init__.py", f'__version__ = "{версия}"\n')
     _файл(
         каталог,
         ".github/badges/version.json",
@@ -216,7 +224,39 @@ def test_живой_контракт_проекта_сходится() -> None:
     )
 
 
-def test_значок_версии_сходится_с_pyproject() -> None:
+def test_путь_к_версии_берётся_из_pyproject(tmp_path: Path) -> None:
+    """Знание «где живёт версия» лежит в одном месте, а не в двух.
+
+    Раньше гейт читал версию прямо из `[project] version`. Когда версия стала
+    динамической (#12), значок стало не с чем сверять — и гейт сказал об этом
+    тем же прогоном. Константа с путём внутри гейта повторила бы ту же
+    ошибку молчаливо: переезд источника разошёлся бы с ней незаметно.
+    """
+    _файл(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\ndynamic = ["version"]\n\n'
+        '[tool.hatch.version]\npath = "где/угодно.py"\n',
+    )
+    _файл(tmp_path, "где/угодно.py", '__version__ = "4.5.6"\n')
+
+    assert preflight.project_version(tmp_path) == "4.5.6"
+
+
+def test_источник_без_версии_роняет_гейт(tmp_path: Path) -> None:
+    """Проверка, не нашедшая предмета, обязана упасть, а не выдумать значение."""
+    _файл(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\ndynamic = ["version"]\n\n[tool.hatch.version]\npath = "пусто.py"\n',
+    )
+    _файл(tmp_path, "пусто.py", "# версии тут нет\n")
+
+    with pytest.raises(ValueError, match="__version__"):
+        preflight.project_version(tmp_path)
+
+
+def test_значок_версии_сходится_с_источником() -> None:
     """Отдельно от предыдущего: этот называет расхождение, а не «есть находки»."""
     ожидается = preflight.expected_badge("version", КОРЕНЬ)
     лежит = json.loads(
