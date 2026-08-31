@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Путь до соседних скриптов достроен строкой выше: приставка ветки живёт в
 # гейте разметки, и второй раз её называть здесь нельзя — разойдётся молча.
 import check_pr_metadata
+import shell_ascii
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -630,6 +631,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         warned.append(f"{имя_витрин}: расхождений {len(показания)}")
     else:
         passed.append(имя_витрин)
+
+    имена_shell = shell_ascii.check_workflows(ROOT)
+    имя_shell = (
+        f"имена shell латиницей (workflow {len(shell_ascii.workflow_files(ROOT))})"
+    )
+    if имена_shell:
+        failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
+    else:
+        passed.append(имя_shell)
 
     контракт = check_showcase(ROOT)
     имя_контракта = (
