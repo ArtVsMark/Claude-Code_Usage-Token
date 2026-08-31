@@ -1,0 +1,85 @@
+# Запись changelog едет вместе с изменением (#10).
+#
+# ПОЧЕМУ ТЕ ЖЕ СОБЫТИЯ, ЧТО У РАЗМЕТКИ. Нужна ли запись, решает **тип** PR:
+# правка документов её не требует. Тип — это метка, и он меняется событием
+# `labeled`, которого в дереве не видно. Без него проверка отвечала бы про тип
+# на момент последнего пуша, и смена типа не давала бы зелёного.
+#
+# ПОЧЕМУ СПИСОК ФАЙЛОВ ИЗ git, А НЕ ИЗ API. Прогон уже держит оба коммита, и
+# `git diff` отвечает точнее запроса к площадке: без квоты, без токена и без
+# отказа там, где без него обходятся.
+name: запись changelog
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+      - ready_for_review
+      - converted_to_draft
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  entry:
+    name: запись есть и она на языке проекта
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужны оба конца: список изменённых файлов считается по `base...head`,
+          # и на мелком клоне общего предка просто нет.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: собрать список изменённых файлов
+        id: changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          файлы=$(git diff --name-only "$BASE...$HEAD" | tr '\n' ' ')
+          echo "files=$файлы" >> "$GITHUB_OUTPUT"
+          echo "изменённых файлов: $(echo $файлы | wc -w)"
+
+      # Черновик и PR из форка проверяются мягко — по той же границе, что и у
+      # разметки: запись доводят к готовности, а внешний участник наших правил
+      # не знает.
+      - name: запись обязательна?
+        id: need
+        env:
+          ТИП: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          ЧЕРНОВИК: ${{ github.event.pull_request.draft }}
+          ФОРК: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          set -euo pipefail
+          нужна=нет
+          case " $ТИП " in
+            *" bug "*|*" enhancement "*) нужна=да ;;
+          esac
+          if [ "$ЧЕРНОВИК" = "true" ] || [ "$ФОРК" = "true" ]; then
+            нужна=нет
+            echo "::notice::черновик или форк — запись не требуется, только проверяется язык"
+          fi
+          echo "value=$нужна" >> "$GITHUB_OUTPUT"
+
+      - name: проверить записи
+        run: |
+          python scripts/changelog.py \
+            ${{ steps.need.outputs.value == 'да' && '--require-entry' || '' }} \
+            --changed ${{ steps.changed.outputs.files }}
