@@ -70,15 +70,41 @@ EXIT_FAILED = 1
 EXIT_BROKEN = 2
 
 
+#: Прогон, задающий эталонный набор проверок. Именно файл, а не «все прогоны
+#: на общей ветке»: см. `main_state`.
+CI_WORKFLOW = "ci.yml"
+
+
 def main_state(repo: str, branch: str) -> tuple[bool, bool, frozenset[str]]:
     """Занят ли `main` прогоном, красный ли он и каков эталонный набор имён.
 
-    Эталон — имена с последнего **завершённого** прогона: незавершённый ещё
-    создаёт джобы, и брать имена из него значит объявить эталоном половину.
+    Эталон — имена джобов последнего **завершённого** прогона `ci`.
+    Незавершённый ещё создаёт джобы, и брать имена из него значит объявить
+    эталоном половину.
+
+    ## Почему джобы прогона, а не check-runs коммита
+
+    Сначала эталон брался как check-runs коммита `main` — и это сделало
+    очередь неспособной смержить хоть что-нибудь.
+
+    Причина в том, что очередь **сама ходит по общей ветке** и оставляет там
+    свой check-run «подвинуть очередь». Он попадал в эталон, а на pull request
+    такой джоб не создаётся никогда: обход на PR не запускается. Значит у
+    любого PR вечно недоставало одного имени, вердикт всегда выходил «джобы не
+    созданы», и ни один PR не становился готовым.
+
+    Замер: за первые полчаса работы конвейер не смержил ни одного PR из трёх
+    зелёных.
+
+    Джобы прогона `ci` от этого свободны по построению: в них ровно то, что
+    создаётся и на общей ветке, и на изменении. Проверки, которые ходят только
+    по `pull_request` — разметка, запись changelog, — в эталон не попадают и не
+    должны: на общей ветке их нет вовсе. Красными они всё равно не пройдут —
+    цвет проверяется по **всем** check-runs головы PR, а не по эталону.
     """
     прогоны = gh_rest.request(
         "GET",
-        f"/repos/{repo}/actions/runs",
+        f"/repos/{repo}/actions/workflows/{CI_WORKFLOW}/runs",
         params={"branch": branch, "event": "push", "per_page": 20},
     )
     список = (
@@ -94,17 +120,17 @@ def main_state(repo: str, branch: str) -> tuple[bool, bool, frozenset[str]]:
     последний = завершённые[0]
     red = последний.get("conclusion") not in {"success", "neutral", "skipped"}
 
-    sha = последний.get("head_sha")
+    run_id = последний.get("id")
     имена: set[str] = set()
-    if isinstance(sha, str):
+    if isinstance(run_id, int):
         ответ = gh_rest.request(
-            "GET", f"/repos/{repo}/commits/{sha}/check-runs", params={"per_page": 100}
+            "GET", f"/repos/{repo}/actions/runs/{run_id}/jobs", params={"per_page": 100}
         )
         if isinstance(ответ, dict):
             имена = {
-                run["name"]
-                for run in ответ.get("check_runs", [])
-                if isinstance(run.get("name"), str)
+                job["name"]
+                for job in ответ.get("jobs", [])
+                if isinstance(job.get("name"), str)
             }
     return busy, red, frozenset(имена)
 
