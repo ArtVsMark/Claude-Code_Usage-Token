@@ -8,6 +8,16 @@
 # ПОЧЕМУ СПИСОК ФАЙЛОВ ИЗ git, А НЕ ИЗ API. Прогон уже держит оба коммита, и
 # `git diff` отвечает точнее запроса к площадке: без квоты, без токена и без
 # отказа там, где без него обходятся.
+#
+# ПОЧЕМУ ИМЕНА ПЕРЕМЕННЫХ ЗДЕСЬ ЛАТИНСКИЕ — а весь остальной проект русский.
+# Внутренний язык проекта распространяется на прозу и на идентификаторы Python,
+# но **не на shell**: bash допускает в имени переменной только ASCII. Первая
+# редакция этого файла писала `файлы=$(git diff …)`, и bash разобрал строку как
+# команду — прогон упал с кодом 127. Второй случай был опаснее и не покраснел
+# бы вовсе: `env:` с ключом `ТИП` кладёт переменную в окружение, но `$ТИП` в
+# bash не раскрывается, потому что парсер требует ASCII-идентификатор.
+# Подстановка вышла бы пустой, условие «нужна ли запись» всегда давало бы
+# «нет», и гейт отключился бы молча, оставаясь зелёным.
 name: запись changelog
 
 on:
@@ -49,13 +59,13 @@ jobs:
       - name: собрать список изменённых файлов
         id: changed
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          файлы=$(git diff --name-only "$BASE...$HEAD" | tr '\n' ' ')
-          echo "files=$файлы" >> "$GITHUB_OUTPUT"
-          echo "изменённых файлов: $(echo $файлы | wc -w)"
+          files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | tr '\n' ' ')
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          echo "изменённых файлов: $(printf '%s' "$files" | wc -w)"
 
       # Черновик и PR из форка проверяются мягко — по той же границе, что и у
       # разметки: запись доводят к готовности, а внешний участник наших правил
@@ -63,23 +73,24 @@ jobs:
       - name: запись обязательна?
         id: need
         env:
-          ТИП: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
-          ЧЕРНОВИК: ${{ github.event.pull_request.draft }}
-          ФОРК: ${{ github.event.pull_request.head.repo.fork }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           set -euo pipefail
-          нужна=нет
-          case " $ТИП " in
-            *" bug "*|*" enhancement "*) нужна=да ;;
+          required=no
+          case " $PR_LABELS " in
+            *" bug "*|*" enhancement "*) required=yes ;;
           esac
-          if [ "$ЧЕРНОВИК" = "true" ] || [ "$ФОРК" = "true" ]; then
-            нужна=нет
-            echo "::notice::черновик или форк — запись не требуется, только проверяется язык"
+          if [ "$PR_DRAFT" = "true" ] || [ "$PR_FORK" = "true" ]; then
+            required=no
+            echo "::notice::черновик или форк — запись не требуется, проверяется только язык"
           fi
-          echo "value=$нужна" >> "$GITHUB_OUTPUT"
+          echo "value=$required" >> "$GITHUB_OUTPUT"
+          echo "запись обязательна: $required (метки: $PR_LABELS)"
 
       - name: проверить записи
         run: |
           python scripts/changelog.py \
-            ${{ steps.need.outputs.value == 'да' && '--require-entry' || '' }} \
+            ${{ steps.need.outputs.value == 'yes' && '--require-entry' || '' }} \
             --changed ${{ steps.changed.outputs.files }}
