@@ -131,7 +131,7 @@ def test_переменная_чтения_находится() -> None:
 def test_латинская_переменная_цикла_проходит() -> None:
     текст = (
         "jobs:\n  x:\n    steps:\n      - run: |\n"
-        "          for attempt in 1 2 3; do echo \"попытка $attempt\"; done\n"
+        '          for attempt in 1 2 3; do echo "попытка $attempt"; done\n'
     )
 
     assert _находки(текст) == []
