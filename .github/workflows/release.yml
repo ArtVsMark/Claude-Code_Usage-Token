@@ -1,0 +1,152 @@
+# Выпуск по тегу: проверки → сборка → публикация → приёмка (#12).
+#
+# ПОРЯДОК НЕ ПРОИЗВОЛЕН. Публикация необратима: занятую версию нельзя выпустить
+# заново даже после удаления с индекса. Поэтому всё, что можно проверить до
+# неё, проверяется до неё, а приёмка идёт после — она отвечает на другой
+# вопрос: что получил тот, кто поставил пакет.
+#
+# ПОЧЕМУ ТЕГ ОБЯЗАН БЫТЬ ИЗ ОБЩЕЙ ВЕТКИ. Тег ставится на любой коммит, в том
+# числе на тот, которого в `main` нет и не будет. Опубликованное с такого тега
+# не совпадёт ни с одним состоянием общей ветки, и разобраться потом будет
+# нечем: пакет уже у людей.
+name: выпуск
+
+on:
+  push:
+    tags: ["v*"]
+  # У события всегда есть ручная кнопка. Здесь она особенно нужна: прогон без
+  # публикации — единственный способ проверить выпуск, ничего не выпустив.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: тег для сухого прогона, например v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Два выпуска разом — это два пакета с одной версией, и второй проиграет
+  # индексу необратимо. Отмена на полпути тоже недопустима: прогон, убитый
+  # между публикацией и приёмкой, оставит выпуск неподтверждённым.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: собрать, проверить и выпустить
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужна история: происхождение тега проверяется отношением к `main`,
+          # а на мелком клоне общего предка нет.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: тег стоит на коммите из main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "коммит $GITHUB_SHA есть в main"
+          else
+            echo "::error::тег $RELEASE_TAG стоит на коммите вне main." \
+                 "Опубликованное с него не совпадёт ни с одним состоянием" \
+                 "общей ветки, а разобраться потом будет нечем: пакет уже у людей"
+            exit 1
+          fi
+
+      - name: поставить проект и инструменты
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . --group dev
+          python -m pip install build twine
+
+      # Тот же полный набор гейтов, что на изменении. Не выборка: выпуск —
+      # последнее место, где уместно экономить на проверках.
+      - name: preflight
+        run: python scripts/preflight.py
+
+      - name: собрать дистрибутив
+        run: python -m build
+
+      - name: версия и содержимое дистрибутива
+        run: |
+          set -euo pipefail
+          version=$(python -c "import claude_code_usage as p; print(p.__version__)")
+          echo "пакет объявляет $version, тег $RELEASE_TAG"
+          python scripts/release.py \
+            --tag "$RELEASE_TAG" \
+            --version "$version" \
+            --wheel "$(ls dist/*.whl)"
+
+      - name: собрать заметки выпуска из фрагментов
+        run: |
+          set -euo pipefail
+          python scripts/changelog.py --strict --render \
+            --version "$RELEASE_TAG" > release-notes.md
+          echo "── заметки выпуска ──"
+          cat release-notes.md
+
+      # Секрета нет — предупреждаем и выходим, а не падаем: до выдачи токена
+      # выпуск просто не публикуется, и это законное состояние, а не поломка.
+      - name: токен индекса не задан
+        if: env.PYPI_TOKEN == ''
+        run: |
+          echo "::warning::PYPI_TOKEN не задан — пакет собран и проверен," \
+               "но не опубликован"
+
+      - name: опубликовать
+        if: env.PYPI_TOKEN != '' && env.DRY_RUN != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: twine upload dist/*
+
+      # Приёмка отвечает на вопрос, которого не задаёт ни один шаг выше: что
+      # получил тот, кто поставил пакет с индекса. Ставится не `-e .`, а
+      # опубликованное — иначе проверялось бы рабочее дерево.
+      - name: приёмка опубликованного
+        if: env.PYPI_TOKEN != '' && env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+          version=$(python -c "import claude_code_usage as p; print(p.__version__)")
+          python -m venv /tmp/приёмка
+          # Индекс отдаёт новую версию не мгновенно: пять попыток с паузой.
+          for попытка in 1 2 3 4 5; do
+            if /tmp/приёмка/bin/pip install --quiet \
+                 "claude-code-usage-meter==$version"; then
+              break
+            fi
+            echo "попытка $попытка: индекс ещё не отдаёт $version"
+            sleep 20
+          done
+          /tmp/приёмка/bin/pip show claude-code-usage-meter
+          # Точка входа обязана существовать и отказывать громко: команда без
+          # аргументов возвращает 2.
+          set +e
+          /tmp/приёмка/bin/claude-code-usage-meter
+          код=$?
+          set -e
+          [ "$код" -eq 2 ] || {
+            echo "::error::опубликованная команда вернула $код вместо 2"
+            exit 1
+          }
+          echo "приёмка пройдена: пакет ставится с индекса и отказывает громко"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
