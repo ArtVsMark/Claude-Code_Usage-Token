@@ -82,6 +82,19 @@ class Snapshot:
     main_busy: bool = False
     main_red: bool = False
 
+    #: На сколько коммитов ветка отстала от общей. Считается сравнением, а не
+    #: берётся из `mergeable_state`.
+    #:
+    #: Полагаться на `mergeable_state == "behind"` оказалось нельзя: площадка
+    #: выставляет это значение **только при включённой защите ветки** с
+    #: требованием актуальности. Без защиты отставший PR приходит как `clean`,
+    #: и правило «зелено на моей ветке ≠ зелено после мержа» осталось бы
+    #: гейтом, вход которого всегда зелёный, — то есть тихим «прошло».
+    #:
+    #: Найдено на живых данных: PR #32 с базой 70bd5be при `main` на d4ec6a7
+    #: отдавал `mergeable_state: clean`.
+    behind_by: int = 0
+
 
 @dataclass(frozen=True)
 class Verdict:
@@ -222,12 +235,15 @@ def evaluate(snapshot: Snapshot) -> Verdict:
             ],
         )
 
-    if pull.get("mergeable_state") == "behind":
+    if snapshot.behind_by > 0 or pull.get("mergeable_state") == "behind":
+        отставание = (
+            f" на {snapshot.behind_by} коммит(ов)" if snapshot.behind_by else ""
+        )
         return Verdict(
             STALE,
             [
-                "ветка отстала от main: её зелёный отвечает про состояние, "
-                "которого после мержа не будет"
+                f"ветка отстала от main{отставание}: её зелёный отвечает про "
+                "состояние, которого после мержа не будет"
             ],
         )
 

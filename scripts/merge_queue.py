@@ -133,8 +133,40 @@ def snapshot_for(
             checks = [c for c in ответ.get("check_runs", []) if isinstance(c, dict)]
 
     return pr_ready.Snapshot(
-        pull=pull, checks=checks, expected=expected, main_busy=busy, main_red=red
+        pull=pull,
+        checks=checks,
+        expected=expected,
+        main_busy=busy,
+        main_red=red,
+        behind_by=behind_by(repo, pull),
     )
+
+
+def behind_by(repo: str, pull: dict[str, Any]) -> int:
+    """На сколько коммитов ветка PR отстала от своей базы.
+
+    Отдельным запросом, потому что `mergeable_state` этого не говорит: значение
+    `behind` площадка выставляет только при включённой защите ветки с
+    требованием актуальности. Без защиты отставший PR приходит как `clean` —
+    и проверка «отстал ли» осталась бы гейтом, чей вход всегда зелёный.
+
+    Ответ площадки без `behind_by` считается «не отстал»: соврать в сторону
+    ожидания дешевле, чем в сторону мержа, но выдумывать отставание на пустом
+    месте значило бы остановить очередь на ровном месте.
+    """
+    сырая_база, сырая_голова = pull.get("base"), pull.get("head")
+    base: dict[str, Any] = сырая_база if isinstance(сырая_база, dict) else {}
+    head: dict[str, Any] = сырая_голова if isinstance(сырая_голова, dict) else {}
+    # Имя ветки, а не `base.sha`: последний — состояние базы на момент, когда
+    # PR открывали, и сравнение с ним всегда дало бы ноль. Отставание считается
+    # от того, где общая ветка **сейчас**.
+    base_ref, head_sha = base.get("ref"), head.get("sha")
+    if not isinstance(base_ref, str) or not isinstance(head_sha, str):
+        return 0
+
+    ответ = gh_rest.request("GET", f"/repos/{repo}/compare/{base_ref}...{head_sha}")
+    значение = ответ.get("behind_by") if isinstance(ответ, dict) else None
+    return значение if isinstance(значение, int) else 0
 
 
 def ensure_labels(repo: str) -> None:
