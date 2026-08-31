@@ -1,0 +1,61 @@
+# Обязательные проверки на изменении и на общей ветке.
+#
+# Состав проверок здесь НЕ перечисляется. Прогон запускает ту же одну команду,
+# что человек запускает перед коммитом, — `scripts/preflight.py` (#5). Список
+# гейтов, записанный и здесь, и там, разошёлся бы молча: правку сделали бы в
+# одном месте, а второе продолжило бы проходить.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # На ветку, а не на репозиторий: параллельные изменения не должны отменять
+  # прогоны друг друга. Прогон на `main` не отменяется никогда — по нему
+  # судят о состоянии общей ветки.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  gates:
+    name: гейты · ${{ matrix.os }} · python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    strategy:
+      # Отключено намеренно: при fail-fast первая красная ячейка гасит
+      # остальные, и «сломалось только на Windows» неотличимо от «сломалось
+      # везде». Ради этого различия матрица и заводилась.
+      fail-fast: false
+      matrix:
+        # Инструмент запускается из обоих окон: облачного (Linux) и
+        # локального (Windows). macOS добавлена третьей, потому что пути и
+        # регистр имён файлов там ведут себя иначе, чем на обеих.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Совпадает с `requires-python` и классификаторами в pyproject.toml.
+        python: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: поставить проект и инструменты разработки
+        # `--group dev` — это PEP 735, он появился в pip 25.1; обновление pip
+        # обязательно, иначе шаг падает на старом runner-образе.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . --group dev
+
+      - name: preflight
+        # Одна команда, а не четыре шага: отдельные шаги показали бы «первый
+        # красный» и скрыли бы остальные, а preflight прогоняет всё и называет
+        # каждое отказавшее по имени.
+        run: python scripts/preflight.py
