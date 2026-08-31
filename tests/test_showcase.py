@@ -1,8 +1,8 @@
-"""Проверки паритета витрин.
+"""Проверки витрины: паритет переводов и контракт вопросов.
 
 Отдельным файлом, а не хвостом `test_preflight.py`, по двум причинам.
 
-Смысловая: паритет витрин — тема документации, а не механики команды; тесты
+Смысловая: витрина — тема документации, а не механики команды; тесты
 `preflight` про перечисление файлов, поиск секретов и коды возврата.
 
 Практическая, и она из инцидента: две ветки, дописывавшие тесты в конец
@@ -13,11 +13,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import preflight
+
+КОРЕНЬ = Path(__file__).resolve().parents[1]
 
 
 def _файл(каталог: Path, имя: str, текст: str) -> Path:
@@ -96,8 +100,11 @@ def test_замечание_не_меняет_код_возврата(
 
     Список проверок подменён пустым: иначе `main` запустил бы `pytest`, то есть
     сам этот тест.
+
+    Контракт витрины заведён исправным намеренно: проверяется, что замечание не
+    красит прогон, а не то, что рядом ничего не сломано.
     """
-    _витрины(tmp_path, "# А\n", "# A\n\nНепереведено.\n")
+    _контракт(tmp_path, ru=_ВИТРИНА_RU, en=_ВИТРИНА_EN + "\nНепереведено.\n")
     monkeypatch.setattr(preflight, "ROOT", tmp_path)
     monkeypatch.setattr(preflight, "checks", tuple)
     monkeypatch.setattr(preflight, "tracked_files", list)
@@ -116,3 +123,421 @@ def test_отказ_остаётся_отказом_рядом_с_замечан
     assert "не прошло: ruff check" in итог
     assert "~ паритет витрин" in итог
     assert "замечаний 1" in итог
+
+
+# ── контракт витрины ──────────────────────────────────────────────────────
+#
+# У проверяющего инструмента две ошибки, и они несимметричны. Ложное «прошло» —
+# приняли витрину, которая не отвечает: пробел не назван, а выглядит как ответ.
+# Ложное «не прошло» — завернули верное: гейт краснеет на законном случае, и
+# первой же правкой его выключают вместе со всем, что он ловил.
+#
+# Поэтому здесь на каждую находку по два теста: подделанный набор обязан
+# находиться, законный — проходить.
+
+#: Вопрос без предмета: минимальный законный ответ. Причина длиннее порога —
+#: короткая причина проверяется отдельным тестом.
+ПРОБЕЛ: dict[str, Any] = {
+    "id": "pypi",
+    "ask": "какая версия опубликована в PyPI",
+    "absent": "предмета нет: дистрибутив не публиковался ни разу",
+}
+
+_ВИТРИНА_RU = "# Заголовок\n\nНабор: [.rules/showcase.json](.rules/showcase.json)\n"
+_ВИТРИНА_EN = "# Title\n\nSet: [.rules/showcase.json](.rules/showcase.json)\n"
+
+
+def _контракт(
+    каталог: Path,
+    вопросы: list[dict[str, Any]] | None = None,
+    ru: str = _ВИТРИНА_RU,
+    en: str = _ВИТРИНА_EN,
+) -> Path:
+    """Отдельное дерево с набором вопросов и обеими витринами."""
+    _файл(
+        каталог,
+        preflight.SHOWCASE_SET,
+        json.dumps(
+            {"schema": "1.0", "questions": [ПРОБЕЛ] if вопросы is None else вопросы},
+            ensure_ascii=False,
+        ),
+    )
+    _витрины(каталог, ru, en)
+    return каталог
+
+
+def _со_значком(
+    каталог: Path,
+    версия: str = "1.2.3",
+    сообщение: str | None = None,
+    вопрос: dict[str, Any] | None = None,
+) -> Path:
+    """Дерево, в котором объявлен и разложен живой значок версии."""
+    объявление: dict[str, Any] = вопрос or {
+        "id": "version",
+        "ask": "какая версия у текущей головы",
+        "badge": ".github/badges/version.json",
+    }
+    показ = "Значок: version.json\n"
+    _контракт(каталог, [ПРОБЕЛ, объявление], _ВИТРИНА_RU + показ, _ВИТРИНА_EN + показ)
+    _файл(каталог, "pyproject.toml", f'[project]\nversion = "{версия}"\n')
+    _файл(
+        каталог,
+        ".github/badges/version.json",
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "label": "version",
+                "message": версия if сообщение is None else сообщение,
+                "color": preflight.BADGE_COLOR,
+            }
+        ),
+    )
+    return каталог
+
+
+# ── законное не краснеет ──────────────────────────────────────────────────
+
+
+def test_живой_контракт_проекта_сходится() -> None:
+    """Контракт проверяется на самом репозитории, а не только на подделках.
+
+    Тест на подделанных данных доказывает, что гейт **умеет** покраснеть.
+    Он не доказывает, что витрина проекта отвечает на весь набор: набор
+    объявлен здесь, и вопрос без ответа появился бы ровно так же молча.
+    """
+    итог = preflight.check_showcase(КОРЕНЬ)
+
+    assert итог.findings == []
+    assert итог.questions == итог.live + итог.named
+    assert итог.live >= 1, (
+        "витрина обязана отвечать живым числом хотя бы на один вопрос: "
+        "набор из одних названных пробелов ничего не измеряет"
+    )
+
+
+def test_значок_версии_сходится_с_pyproject() -> None:
+    """Отдельно от предыдущего: этот называет расхождение, а не «есть находки»."""
+    ожидается = preflight.expected_badge("version", КОРЕНЬ)
+    лежит = json.loads(
+        (КОРЕНЬ / ".github" / "badges" / "version.json").read_text(encoding="utf-8")
+    )
+    assert лежит == ожидается
+
+
+def test_минимальный_контракт_проходит(tmp_path: Path) -> None:
+    итог = preflight.check_showcase(_контракт(tmp_path))
+
+    assert итог.findings == []
+    assert (итог.questions, итог.live, итог.named) == (1, 0, 1)
+
+
+def test_значок_с_отдельной_ветки_не_требует_файла(tmp_path: Path) -> None:
+    """Ложное «не прошло», которое напрашивается само.
+
+    Значок, объявленный на отдельной ветке, в этом дереве не лежит и лежать не
+    должен: ветка заводится ровно для того, чтобы пересборка значка не двигала
+    общую. Требовать файл здесь значило бы заворачивать верное.
+    """
+    корень = _контракт(
+        tmp_path,
+        [
+            ПРОБЕЛ,
+            {
+                "id": "coverage",
+                "ask": "какая доля кода покрыта тестами",
+                "badge": ".github/badges/coverage.json",
+                "branch": "badges",
+            },
+        ],
+        _ВИТРИНА_RU + "Значок: coverage.json\n",
+        _ВИТРИНА_EN + "Значок: coverage.json\n",
+    )
+
+    assert preflight.check_showcase(корень).findings == []
+
+
+# ── подделанное находится ─────────────────────────────────────────────────
+
+
+def test_вопрос_без_ответа_находится(tmp_path: Path) -> None:
+    """Главная находка гейта: пропуск и отсутствие предмета обязаны различаться."""
+    корень = _контракт(
+        tmp_path, [{"id": "coverage", "ask": "какая доля кода покрыта тестами"}]
+    )
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "coverage" in находки[0]
+    assert "ответа нет вовсе" in находки[0]
+
+
+def test_два_ответа_на_один_вопрос_находятся(tmp_path: Path) -> None:
+    корень = _контракт(
+        tmp_path,
+        [
+            {
+                "id": "pypi",
+                "ask": "…",
+                "badge": "b.json",
+                "absent": "причина длиннее порога",
+            }
+        ],
+    )
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "ответ один" in находки[0]
+
+
+def test_короткая_причина_находится(tmp_path: Path) -> None:
+    """Отписка вместо причины: «нет» объясняет ровно столько же, сколько пропуск."""
+    корень = _контракт(tmp_path, [{"id": "pypi", "ask": "…", "absent": "нет"}])
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "слишком коротка" in находки[0]
+
+
+def test_повтор_вопроса_находится(tmp_path: Path) -> None:
+    """Считаются уникальные имена, а не строки набора.
+
+    На этом уже был неверный вывод в соседнем месте проекта: после обновления
+    ветки check-runs удваиваются, и «32 проверки» вместо шестнадцати
+    продержались сутки. Повтор в наборе даёт ту же ошибку — счёт растёт, а
+    отвеченного не прибавляется.
+    """
+    корень = _контракт(tmp_path, [ПРОБЕЛ, ПРОБЕЛ])
+
+    итог = preflight.check_showcase(корень)
+
+    assert итог.questions == 1, "повтор не должен удваивать счёт"
+    assert len(итог.findings) == 1
+    assert "дважды" in итог.findings[0]
+
+
+def test_объявленного_значка_нет_на_диске(tmp_path: Path) -> None:
+    корень = _со_значком(tmp_path)
+    (корень / ".github" / "badges" / "version.json").unlink()
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "файла нет" in находки[0]
+
+
+def test_значок_не_показан_в_витрине(tmp_path: Path) -> None:
+    """Значок, которого никто не показывает, отвечает в пустоту.
+
+    Сломана одна витрина из двух: расхождение витрин — тоже находка, и
+    проверять надо каждую, а не их склейку.
+    """
+    корень = _со_значком(tmp_path)
+    _файл(корень, preflight.SHOWCASE_EN, _ВИТРИНА_EN)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "README.en.md" in находки[0]
+    assert "ответ в пустоту" in находки[0]
+
+
+def test_значок_разошёлся_с_деревом(tmp_path: Path) -> None:
+    """То, чего отдельная ветка со значками дать не может.
+
+    Версию правят в `pyproject.toml`, а значок остаётся прежним — и витрина
+    месяцами показывает число, которого в дереве нет. Застывший значок с
+    витрины неотличим от честного, поэтому сверка обязана быть в том же
+    прогоне, что и всё остальное.
+    """
+    корень = _со_значком(tmp_path, версия="2.0.0", сообщение="1.2.3")
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "разошёлся с деревом" in находки[0]
+    assert "2.0.0" in находки[0]
+
+
+def test_значок_без_правила_вывода(tmp_path: Path) -> None:
+    """Гейт, не нашедший предмета проверки, обязан упасть.
+
+    Значок объявлен для вопроса, которого гейт вычислять не умеет. Сверять его
+    не с чем, и «зелено» здесь означало бы «не проверяли» — ровно та тишина,
+    ради устранения которой гейт и заводится.
+    """
+    корень = _со_значком(
+        tmp_path,
+        вопрос={
+            "id": "coverage",
+            "ask": "какая доля кода покрыта тестами",
+            "badge": ".github/badges/version.json",
+        },
+    )
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "правила вывода" in находки[0]
+
+
+def test_значок_не_читается(tmp_path: Path) -> None:
+    корень = _со_значком(tmp_path)
+    _файл(корень, ".github/badges/version.json", "{это не json")
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "не прочитан" in находки[0]
+
+
+def test_витрина_не_ссылается_на_набор(tmp_path: Path) -> None:
+    """Названный пробел, до которого нельзя дойти от витрины, назван для своих."""
+    корень = _контракт(tmp_path, ru="# Заголовок\n", en="# Title\n")
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 2
+    assert all("нет ссылки" in находка for находка in находки)
+
+
+def test_упоминание_набора_не_считается_ссылкой(tmp_path: Path) -> None:
+    """Регрессия на ложное «прошло», найденное попыткой провалить гейт.
+
+    Проверка искала в витрине саму строку пути — и оставалась зелёной, когда у
+    ссылки подменили адрес: путь оставался в **подписи** ссылки, и условие
+    выполнялось на ней. Гейт держал случай, который не ломается, и пропускал
+    тот, ради которого заведён.
+    """
+    упоминание = "# Заголовок\n\nНабор вопросов — `.rules/showcase.json`.\n"
+    корень = _контракт(tmp_path, ru=упоминание, en=упоминание)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 2
+    assert all("нет ссылки" in находка for находка in находки)
+
+
+def test_ссылка_сноской_считается_ссылкой(tmp_path: Path) -> None:
+    """Обратная сторона: заворачивать законную разметку тоже нельзя."""
+    сноской = (
+        "# Заголовок\n\nНабор вопросов — [здесь][набор].\n\n"
+        "[набор]: .rules/showcase.json\n"
+    )
+    корень = _контракт(tmp_path, ru=сноской, en=сноской)
+
+    assert preflight.check_showcase(корень).findings == []
+
+
+def test_набора_нет_гейт_не_молчит(tmp_path: Path) -> None:
+    _витрины(tmp_path, _ВИТРИНА_RU, _ВИТРИНА_EN)
+
+    итог = preflight.check_showcase(tmp_path)
+
+    assert len(итог.findings) == 1
+    assert "не прочитан" in итог.findings[0]
+    assert (итог.questions, итог.live, итог.named) == (0, 0, 0)
+
+
+def test_набор_не_разбирается(tmp_path: Path) -> None:
+    """Мусор вместо JSON — отказ, а не тихое «вопросов ноль»."""
+    _файл(tmp_path, preflight.SHOWCASE_SET, "{набор поехал")
+    _витрины(tmp_path, _ВИТРИНА_RU, _ВИТРИНА_EN)
+
+    находки = preflight.check_showcase(tmp_path).findings
+
+    assert len(находки) == 1
+    assert "не прочитан" in находки[0]
+
+
+def test_пустой_набор_гейт_не_молчит(tmp_path: Path) -> None:
+    _файл(tmp_path, preflight.SHOWCASE_SET, json.dumps({"questions": []}))
+    _витрины(tmp_path, _ВИТРИНА_RU, _ВИТРИНА_EN)
+
+    находки = preflight.check_showcase(tmp_path).findings
+
+    assert len(находки) == 1
+    assert "ни одного вопроса" in находки[0]
+
+
+def test_витрины_нет_гейт_не_молчит(tmp_path: Path) -> None:
+    _файл(tmp_path, preflight.SHOWCASE_SET, json.dumps({"questions": [ПРОБЕЛ]}))
+    _файл(tmp_path, preflight.SHOWCASE_RU, _ВИТРИНА_RU)
+
+    находки = preflight.check_showcase(tmp_path).findings
+
+    assert len(находки) == 1
+    assert "README.en.md" in находки[0]
+    assert "показывать ответы негде" in находки[0]
+
+
+def test_запись_набора_не_объект(tmp_path: Path) -> None:
+    корень = _контракт(tmp_path, ["ci"])  # type: ignore[list-item]
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "не объект" in находки[0]
+
+
+def test_вопрос_без_имени(tmp_path: Path) -> None:
+    корень = _контракт(tmp_path, [{"ask": "…", "absent": "причина длиннее порога"}])
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "без id" in находки[0]
+
+
+def test_контракт_отказ_а_не_замечание(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Граница между отказом и замечанием проверяется на самом `main`.
+
+    Паритет витрин предупреждает: расхождение переводов вычисляется по
+    косвенным признакам и на законном тексте ошибается. Здесь ошибиться не на
+    чем — вопрос либо имеет ровно один ответ, либо нет. Достоверное запрещают.
+    """
+    _контракт(tmp_path, [{"id": "coverage", "ask": "какая доля покрыта"}])
+    monkeypatch.setattr(preflight, "ROOT", tmp_path)
+    monkeypatch.setattr(preflight, "checks", tuple)
+    monkeypatch.setattr(preflight, "tracked_files", list)
+
+    код = preflight.main([])
+
+    вывод = capsys.readouterr().err
+    assert код == preflight.EXIT_FAILED
+    assert "✗ контракт витрины" in вывод
+    assert "ответа нет вовсе" in вывод
+
+
+def test_счёт_контракта_попадает_в_вывод(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """«Контракт витрины ✓» без чисел неотличимо от «набор пуст»."""
+    _контракт(tmp_path)
+    monkeypatch.setattr(preflight, "ROOT", tmp_path)
+    monkeypatch.setattr(preflight, "checks", tuple)
+    monkeypatch.setattr(preflight, "tracked_files", list)
+
+    assert preflight.main([]) == 0
+    assert (
+        "вопросов 1, живым числом 0, названо без предмета 1" in capsys.readouterr().err
+    )
+
+
+def test_причина_не_строка(tmp_path: Path) -> None:
+    """Отказ обязан называть, что именно не вышло.
+
+    «Слишком коротка» про число — уже не название: правят строку, а сломано
+    поле.
+    """
+    корень = _контракт(tmp_path, [{"id": "pypi", "ask": "…", "absent": 42}])
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "не строка" in находки[0]

@@ -18,12 +18,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -217,6 +219,267 @@ def compare_showcases(root: Path) -> list[str]:
     return warnings
 
 
+# ── контракт витрины ──────────────────────────────────────────────────────
+#
+# Витрина отвечает на объявленный набор вопросов — или называет, чего нет.
+#
+# ПОЧЕМУ НАБОР ОДИН НА ВСЕ ПРОЕКТЫ. Он взят у каталога и не сокращён под свои
+# возможности. Набор, подогнанный под то, на что проект уже отвечает, не с чем
+# сравнить, и того, что проект перестал отвечать, никто не заметит: вопрос
+# исчезнет вместе с ответом.
+#
+# ПОЧЕМУ ПРОБЕЛ НАЗЫВАЕТСЯ, А НЕ ОПУСКАЕТСЯ. Значок, которого нет, и значок,
+# который застыл, с витрины НЕОТЛИЧИМЫ. «Покрытие не измеряется» и «механизм
+# замера сломался и молчит» — разные вещи, и разница видна только тогда, когда
+# пробел назван словом.
+#
+# ПОЧЕМУ ОТКАЗ, А НЕ ЗАМЕЧАНИЕ — в отличие от паритета витрин рядом. Граница
+# проходит по достоверности: расхождение переводов проверка вычисляет по
+# косвенным признакам и на законном тексте ошибается, поэтому предупреждает.
+# Здесь ошибиться не на чем — вопрос либо имеет ровно один ответ, либо нет, и
+# значок либо сходится с деревом, либо разошёлся. Достоверное запрещают.
+
+#: Набор вопросов витрины. Живёт данными, а не константами в этом файле:
+#: набор общий и приходит от каталога, а гейт свой. Жизненный цикл у них
+#: разный, и держать их в одном месте значило бы править чужое при каждой
+#: своей правке.
+SHOWCASE_SET = ".rules/showcase.json"
+
+#: Причина отсутствия короче этого — отписка, а не причина. Двадцать символов
+#: не мера качества: это нижняя граница, ниже которой объяснения точно нет.
+ABSENT_MIN = 20
+
+#: Цвет значка постоянный. Цвет на shields.io читается как оценка, а оценивать
+#: здесь нечего: значок сообщает число, а не своё мнение о нём.
+BADGE_COLOR = "blue"
+
+#: Набор обязан быть в витрине **ссылкой**, а не упоминанием.
+#:
+#: Разница нашлась попыткой провалить гейт, а не прогоном. Проверка сначала
+#: искала в витрине саму строку пути — и оставалась зелёной, когда у ссылки
+#: подменили адрес: путь никуда не делся, он остался в **подписи** ссылки
+#: (``[`.rules/showcase.json`](…)``), и условие выполнялось на ней. То есть
+#: гейт держал ровно тот случай, который не ломается, и пропускал тот, ради
+#: которого заведён: с витрины до названных пробелов было уже не дойти.
+_НАБОР_ССЫЛКОЙ = re.compile(
+    r"\]\(<?" + re.escape(SHOWCASE_SET) + r"|\]:\s*<?" + re.escape(SHOWCASE_SET)
+)
+
+
+@dataclass(frozen=True)
+class ShowcaseContract:
+    """Находки и **счёт**: вопросов, живых ответов, названных пробелов.
+
+    Счёт входит в вывод по той же причине, что и охват у проверки на секреты:
+    «контракт витрины ✓» без чисел неотличимо от «набор пуст, и проверять было
+    нечего». Считаются при этом **уникальные** вопросы, а не строки набора —
+    повтор удваивал бы счёт, ничего не добавляя.
+    """
+
+    findings: list[str]
+    questions: int
+    live: int
+    named: int
+
+
+def project_version(root: Path) -> str:
+    """Версия проекта из ``pyproject.toml`` — единственный источник для значка.
+
+    Не из ``claude_code_usage.__version__``: тот сверяется с метаданными
+    отдельным тестом, и брать значение оттуда значило бы завести третье место,
+    где живёт одна и та же версия.
+    """
+    with (root / "pyproject.toml").open("rb") as fh:
+        version = tomllib.load(fh)["project"]["version"]
+    if not isinstance(version, str):
+        raise TypeError(f"версия в pyproject.toml не строка: {version!r}")
+    return version
+
+
+def expected_badge(qid: str, root: Path) -> dict[str, object] | None:
+    """Что обязано лежать в значке вопроса ``qid``, вычисленное из дерева.
+
+    ``None`` означает «правила вывода для этого вопроса здесь нет». Это не
+    разрешение пропустить: гейт, не нашедший предмета проверки, обязан
+    сказать об этом, иначе объявленный значок сверяется с пустотой.
+    """
+    if qid == "version":
+        return {
+            "schemaVersion": 1,
+            "label": "version",
+            "message": project_version(root),
+            "color": BADGE_COLOR,
+        }
+    return None
+
+
+def _check_badge(
+    qid: str,
+    badge: str,
+    question: dict[str, object],
+    root: Path,
+    shown: dict[str, str],
+) -> list[str]:
+    """Проверить объявленный значок: показан ли, есть ли он, сходится ли с деревом."""
+    findings: list[str] = []
+
+    имя = PurePosixPath(badge).name
+    for витрина, текст in shown.items():
+        if имя not in текст:
+            findings.append(
+                f"{qid}: значок {badge} объявлен, но в {витрина} его нет — "
+                "ответ в пустоту"
+            )
+
+    if question.get("branch", "main") != "main":
+        # Значок с отдельной ветки в этом дереве не лежит и лежать не должен:
+        # ветка заводится ровно для того, чтобы пересборка значка не двигала
+        # общую. Требовать файл здесь значило бы требовать того, чего быть не
+        # может, — то есть заворачивать верное.
+        return findings
+
+    path = root / badge
+    if not path.is_file():
+        findings.append(
+            f"{qid}: значок {badge} объявлен, а файла нет — витрина обещает "
+            "ответ, которого не существует"
+        )
+        return findings
+
+    try:
+        expected = expected_badge(qid, root)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        findings.append(f"{qid}: значок {badge} не с чем сверить — {exc}")
+        return findings
+
+    if expected is None:
+        findings.append(
+            f"{qid}: значок {badge} объявлен, а правила вывода для него в "
+            "гейте нет. Сверить его не с чем, и «зелено» здесь означало бы "
+            "«не проверяли»"
+        )
+        return findings
+
+    try:
+        actual = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        findings.append(f"{qid}: значок {badge} не прочитан — {exc}")
+        return findings
+
+    if actual != expected:
+        findings.append(
+            f"{qid}: значок {badge} разошёлся с деревом — в файле {actual}, "
+            f"из дерева выходит {expected}"
+        )
+
+    return findings
+
+
+def check_showcase(root: Path) -> ShowcaseContract:
+    """Сверить витрины с объявленным набором вопросов.
+
+    Возвращает находки и счёт. Находка здесь — **отказ**: каждая из них
+    решается однозначно, без догадок о намерении автора.
+    """
+    declared = root / SHOWCASE_SET
+    try:
+        questions = json.loads(declared.read_text(encoding="utf-8"))["questions"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return ShowcaseContract(
+            [f"{SHOWCASE_SET}: набор вопросов витрины не прочитан — {exc}"], 0, 0, 0
+        )
+
+    if not isinstance(questions, list) or not questions:
+        return ShowcaseContract(
+            [
+                f"{SHOWCASE_SET}: набор не называет ни одного вопроса — "
+                "витрина без вопросов не витрина"
+            ],
+            0,
+            0,
+            0,
+        )
+
+    shown: dict[str, str] = {}
+    for имя in (SHOWCASE_RU, SHOWCASE_EN):
+        путь = root / имя
+        if not путь.is_file():
+            return ShowcaseContract(
+                [f"{имя}: витрины нет — показывать ответы негде"], 0, 0, 0
+            )
+        shown[имя] = путь.read_text(encoding="utf-8")
+
+    findings: list[str] = []
+
+    for витрина, текст in shown.items():
+        if _НАБОР_ССЫЛКОЙ.search(текст) is None:
+            findings.append(
+                f"{витрина}: на набор {SHOWCASE_SET} с витрины нет ссылки. "
+                "Названный пробел, до которого нельзя дойти от витрины, "
+                "назван только для того, кто и так знает, где смотреть"
+            )
+
+    live = 0
+    named = 0
+    seen: set[str] = set()
+
+    for номер, question in enumerate(questions, 1):
+        if not isinstance(question, dict):
+            findings.append(f"вопрос №{номер}: запись не объект — разбирать нечего")
+            continue
+
+        qid = str(question.get("id", "")).strip()
+        if not qid:
+            findings.append(f"вопрос №{номер}: без id — на такой ответ не сослаться")
+            continue
+
+        if qid in seen:
+            findings.append(
+                f"{qid}: вопрос назван в наборе дважды. Считаются уникальные "
+                "имена, а не строки: повтор удваивает счёт и прячет вопрос, "
+                "которого в наборе нет"
+            )
+            continue
+        seen.add(qid)
+
+        badge = question.get("badge")
+        absent = question.get("absent")
+
+        if badge and absent:
+            findings.append(f"{qid}: и значок, и причина отсутствия — ответ один")
+            continue
+
+        if not badge and not absent:
+            findings.append(
+                f"{qid} «{question.get('ask', '')}»: ответа нет вовсе. Либо "
+                "значок, либо строка absent с причиной — пропуск и отсутствие "
+                "предмета обязаны выглядеть по-разному"
+            )
+            continue
+
+        if absent:
+            named += 1
+            if not isinstance(absent, str):
+                # Отдельно от «коротка»: отказ обязан называть, что именно не
+                # вышло, а «слишком коротка» про число — уже не название.
+                findings.append(f"{qid}: причина отсутствия не строка — {absent!r}")
+            elif len(absent.strip()) < ABSENT_MIN:
+                findings.append(
+                    f"{qid}: причина отсутствия слишком коротка, чтобы ею "
+                    "что-то объяснить"
+                )
+            continue
+
+        live += 1
+        if not isinstance(badge, str):
+            findings.append(f"{qid}: значок объявлен не путём — {badge!r}")
+            continue
+
+        findings.extend(_check_badge(qid, badge, question, root, shown))
+
+    return ShowcaseContract(findings, len(seen), live, named)
+
+
 # ── прогон ────────────────────────────────────────────────────────────────
 
 
@@ -318,6 +581,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         warned.append(f"{имя_витрин}: расхождений {len(показания)}")
     else:
         passed.append(имя_витрин)
+
+    контракт = check_showcase(ROOT)
+    имя_контракта = (
+        f"контракт витрины (вопросов {контракт.questions}, "
+        f"живым числом {контракт.live}, названо без предмета {контракт.named})"
+    )
+    if контракт.findings:
+        failed.append((имя_контракта, "\n".join(контракт.findings)))
+    else:
+        passed.append(имя_контракта)
 
     name = (
         f"секреты и замеры в диффе "

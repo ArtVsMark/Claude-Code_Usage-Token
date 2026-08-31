@@ -1,8 +1,25 @@
 # claude-code-usage
 
+[![Version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2Fclaude-code-usage%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
+
 **How much of your Claude Code limits is actually left — as a number, not a traffic light.**
 
 > 🇷🇺 [Русская версия](README.md) · Unofficial tool, not affiliated with Anthropic.
+
+> **What the showcase does not answer, and why.** The question set is one and
+> the same across projects ([`.rules/showcase.json`](.rules/showcase.json)), and
+> a gap in it is named rather than omitted: of the ten questions **one** is
+> answered by a live number, the other nine are named with a reason. There is no
+> **CI** badge — the platform reports run state itself, and a second source of
+> the same thing drifts from the first silently. There are no **release** or
+> **PyPI** badges — the project has never been released, the subject does not
+> exist. There is no **coverage** badge — coverage is not measured here, and a
+> number filled in by hand would freeze on the very next change.
+>
+> The gap is named because a missing badge and a frozen badge look
+> **identical** from the outside. This is held by the `scripts/preflight.py`
+> gate: a question without an answer, and a badge that has drifted from the
+> tree, are refusals rather than warnings.
 
 ## The problem
 
@@ -64,8 +81,8 @@ which open with an English note.
 
 ## Status
 
-Early development: **the problem statement and the rules are written down, the
-code is not.** Order of work: epics
+Early development: **the problem statement and the rules are written down,
+the scaffold is in place, the behaviour is not.** Order of work: epics
 [#1](https://github.com/ArtVsMark/claude-code-usage/issues/1) (sample → report
 → calibrate) and
 [#3](https://github.com/ArtVsMark/claude-code-usage/issues/3) (pre-launch
