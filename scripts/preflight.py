@@ -27,6 +27,12 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+# Путь до соседних скриптов достроен строкой выше: приставка ветки живёт в
+# гейте разметки, и второй раз её называть здесь нельзя — разойдётся молча.
+import check_pr_metadata
+
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Ненулевой код при любом отказе. Конкретное значение неважно, важно, что
@@ -496,6 +502,45 @@ def run_check(check: Check) -> tuple[bool, str]:
     return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
 
 
+def current_branch() -> str:
+    """Имя текущей ветки — или пусто.
+
+    Пусто означает открепленную голову, и в прогоне это норма: `checkout`
+    ставит merge-коммит PR, у которого ветки нет вовсе. Поэтому пустое имя
+    здесь не «гейт не нашёл предмета», а «проверять нечего по построению».
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+    except OSError:
+        return ""
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def branch_note(branch: str) -> str:
+    """Замечание об имени ветки — или пусто, если сказать нечего.
+
+    Замечание, а не отказ, и по месту: отказ живёт на pull request, где у него
+    есть предмет спора и цена. Здесь задача другая — сказать до коммита, пока
+    починка стоит одного `git branch -m`, а не перепушенной ветки и
+    переоткрытого PR: head-ветку у открытого PR площадка менять не умеет.
+    """
+    приставка = check_pr_metadata.AGENT_BRANCH_PREFIX
+    if not branch or branch == "main" or branch.startswith(приставка):
+        return ""
+    return (
+        f"ветка `{branch}` не из `{приставка}**` — так называются ветки "
+        f"агентского окна. Сейчас это `git branch -m {приставка}<имя>`, "
+        "после открытия PR — перепушенная ветка и переоткрытый PR"
+    )
+
+
 def report(
     passed: Sequence[str],
     failed: Sequence[tuple[str, str]],
@@ -574,6 +619,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_BROKEN
+
+    заметка_о_ветке = branch_note(current_branch())
+    if заметка_о_ветке:
+        warned.append(f"имя ветки: {заметка_о_ветке}")
 
     показания = compare_showcases(ROOT)
     имя_витрин = "паритет витрин"

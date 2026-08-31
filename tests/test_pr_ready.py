@@ -34,7 +34,7 @@ def _pull(**поля: Any) -> dict[str, Any]:
         "mergeable_state": "clean",
         "body": "Closes #1",
         "labels": [{"name": "area/ci"}, {"name": "enhancement"}],
-        "head": {"sha": "deadbeef", "repo": {"fork": False}},
+        "head": {"sha": "deadbeef", "ref": "agent/пример", "repo": {"fork": False}},
     }
     основа.update(поля)
     return основа

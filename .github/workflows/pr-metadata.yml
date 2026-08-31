@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   labels:
-    name: зона, тип и связь с задачей
+    name: зона, тип, связь с задачей и имя ветки
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

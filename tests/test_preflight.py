@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import check_pr_metadata
 import preflight
 
 # Литералы шаблонов собраны из частей ровно по той же причине, что и в самом
@@ -257,3 +258,45 @@ def test_кириллица_доходит_до_узкого_потока_чит
     поток.flush()
 
     assert буфер.getvalue().decode("utf-8") == строка
+
+
+# ── имя ветки ─────────────────────────────────────────────────────────────
+
+
+def test_ветка_не_из_agent_даёт_замечание() -> None:
+    """Сказать до коммита дешевле, чем на pull request.
+
+    Там починка стоит перепушенной ветки и переоткрытого PR: head-ветку у
+    открытого PR площадка менять не умеет.
+    """
+    заметка = preflight.branch_note("claude/release-12")
+
+    assert "claude/release-12" in заметка
+    assert "git branch -m" in заметка, "замечание обязано называть, что делать"
+
+
+def test_ветка_из_agent_молчит() -> None:
+    assert preflight.branch_note("agent/pr-check-6") == ""
+
+
+def test_на_main_и_без_ветки_молчит() -> None:
+    """Открепленная голова — норма прогона, а не находка.
+
+    `checkout` ставит merge-коммит PR, у которого ветки нет вовсе, и шуметь об
+    этом значило бы приучить пропускать замечания.
+    """
+    assert preflight.branch_note("") == ""
+    assert preflight.branch_note("main") == ""
+
+
+def test_замечание_не_влияет_на_код_возврата() -> None:
+    """Замечание — не отказ: иначе коммит останавливался бы из-за имени ветки."""
+    итог = preflight.report(["проверка"], [], ["имя ветки: не из agent/**"])
+
+    assert "всё чисто" in итог
+    assert "замечаний 1" in итог
+
+
+def test_приставка_ветки_берётся_из_гейта_разметки() -> None:
+    """Одно знание — одно место. Названное дважды, оно разойдётся молча."""
+    assert preflight.branch_note(f"{check_pr_metadata.AGENT_BRANCH_PREFIX}что-то") == ""

@@ -28,7 +28,11 @@ def _pull(номер: int, **поля: Any) -> dict[str, Any]:
         "mergeable_state": "clean",
         "body": "Closes #1",
         "labels": [{"name": "area/ci"}, {"name": "enhancement"}],
-        "head": {"sha": f"sha{номер}", "repo": {"fork": False}},
+        "head": {
+            "sha": f"sha{номер}",
+            "ref": f"agent/ветка-{номер}",
+            "repo": {"fork": False},
+        },
         "base": {"ref": "main", "sha": "base-sha"},
     }
     основа.update(поля)
