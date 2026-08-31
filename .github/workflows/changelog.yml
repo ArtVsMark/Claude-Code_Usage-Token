@@ -1,0 +1,96 @@
+# Запись changelog едет вместе с изменением (#10).
+#
+# ПОЧЕМУ ТЕ ЖЕ СОБЫТИЯ, ЧТО У РАЗМЕТКИ. Нужна ли запись, решает **тип** PR:
+# правка документов её не требует. Тип — это метка, и он меняется событием
+# `labeled`, которого в дереве не видно. Без него проверка отвечала бы про тип
+# на момент последнего пуша, и смена типа не давала бы зелёного.
+#
+# ПОЧЕМУ СПИСОК ФАЙЛОВ ИЗ git, А НЕ ИЗ API. Прогон уже держит оба коммита, и
+# `git diff` отвечает точнее запроса к площадке: без квоты, без токена и без
+# отказа там, где без него обходятся.
+#
+# ПОЧЕМУ ИМЕНА ПЕРЕМЕННЫХ ЗДЕСЬ ЛАТИНСКИЕ — а весь остальной проект русский.
+# Внутренний язык проекта распространяется на прозу и на идентификаторы Python,
+# но **не на shell**: bash допускает в имени переменной только ASCII. Первая
+# редакция этого файла писала `файлы=$(git diff …)`, и bash разобрал строку как
+# команду — прогон упал с кодом 127. Второй случай был опаснее и не покраснел
+# бы вовсе: `env:` с ключом `ТИП` кладёт переменную в окружение, но `$ТИП` в
+# bash не раскрывается, потому что парсер требует ASCII-идентификатор.
+# Подстановка вышла бы пустой, условие «нужна ли запись» всегда давало бы
+# «нет», и гейт отключился бы молча, оставаясь зелёным.
+name: запись changelog
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+      - ready_for_review
+      - converted_to_draft
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  entry:
+    name: запись есть и она на языке проекта
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужны оба конца: список изменённых файлов считается по `base...head`,
+          # и на мелком клоне общего предка просто нет.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: собрать список изменённых файлов
+        id: changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          files=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | tr '\n' ' ')
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          echo "изменённых файлов: $(printf '%s' "$files" | wc -w)"
+
+      # Черновик и PR из форка проверяются мягко — по той же границе, что и у
+      # разметки: запись доводят к готовности, а внешний участник наших правил
+      # не знает.
+      - name: запись обязательна?
+        id: need
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          set -euo pipefail
+          required=no
+          case " $PR_LABELS " in
+            *" bug "*|*" enhancement "*) required=yes ;;
+          esac
+          if [ "$PR_DRAFT" = "true" ] || [ "$PR_FORK" = "true" ]; then
+            required=no
+            echo "::notice::черновик или форк — запись не требуется, проверяется только язык"
+          fi
+          echo "value=$required" >> "$GITHUB_OUTPUT"
+          echo "запись обязательна: $required (метки: $PR_LABELS)"
+
+      - name: проверить записи
+        run: |
+          python scripts/changelog.py \
+            ${{ steps.need.outputs.value == 'yes' && '--require-entry' || '' }} \
+            --changed ${{ steps.changed.outputs.files }}
