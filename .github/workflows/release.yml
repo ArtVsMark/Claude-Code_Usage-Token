@@ -101,10 +101,15 @@ jobs:
             --version "$version" \
             --wheel "$(ls dist/*.whl)"
 
-      - name: собрать заметки выпуска из фрагментов
+      # Заметки берутся из СВОДА, а не из фрагментов. Фрагменты складываются в
+      # `CHANGELOG.md` при подготовке версии и на этом расходуются: пока они
+      # оставались на месте, заметки следующего выпуска повторили бы прошлые
+      # целиком (#49). Раздела для этого тега нет — отказ: значит фрагменты не
+      # сложены, и заметки собрались бы из чужих записей.
+      - name: взять заметки выпуска из свода
         run: |
           set -euo pipefail
-          python scripts/changelog.py --strict --render \
+          python scripts/changelog.py --section \
             --version "$RELEASE_TAG" > release-notes.md
           echo "── заметки выпуска ──"
           cat release-notes.md

@@ -232,10 +232,135 @@ def test_новая_запись_в_диффе_считается(
     assert код == 0
 
 
-def test_запись_проекта_в_порядке() -> None:
-    """Гейт прогоняется на самом репозитории, а не только на подделках."""
+def test_записи_проекта_в_порядке() -> None:
+    """Гейт прогоняется на самом репозитории, а не только на подделках.
+
+    Числа записей здесь нет намеренно. Прежняя редакция требовала «хотя бы
+    одну» — и это перестало быть правдой ровно тогда, когда фрагменты начали
+    расходоваться складыванием (#49): сразу после подготовки версии каталог
+    пуст, и это законное состояние, а не поломка.
+    """
     фрагменты, претензии = changelog.collect(changelog.ROOT)
 
     assert претензии == []
     assert changelog.language_warnings(фрагменты) == []
-    assert фрагменты, "в проекте должна быть хотя бы одна запись — эта"
+
+
+# ── свод: фрагменты расходуются складыванием (#49) ────────────────────────
+
+
+def _дерево_свода(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **записи: str
+) -> Path:
+    """Отдельное дерево с фрагментами и подменённым корнем."""
+    каталог = tmp_path / changelog.FRAGMENTS
+    каталог.mkdir(parents=True)
+    for имя, текст in записи.items():
+        (каталог / имя.replace("__", ".")).write_text(текст, encoding="utf-8")
+    monkeypatch.setattr(changelog, "ROOT", tmp_path)
+    return tmp_path
+
+
+def test_складывание_создаёт_свод_и_расходует_фрагменты(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Главное требование #49: после складывания фрагментов не остаётся.
+
+    Пока они оставались на месте, заметки следующего выпуска повторили бы
+    записи прошлого целиком — и увидели бы это уже на странице выпуска.
+    """
+    корень = _дерево_свода(
+        tmp_path, monkeypatch, **{"7__added__md": "Первая запись.\n"}
+    )
+
+    код = changelog.main(["--fold", "--version", "v0.1.0"])
+
+    свод = (корень / changelog.JOURNAL).read_text(encoding="utf-8")
+    assert код == 0
+    assert "## v0.1.0" in свод
+    assert "Первая запись." in свод
+    assert list((корень / changelog.FRAGMENTS).glob("*.md")) == []
+
+
+def test_второе_складывание_той_же_версии_отказ(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Иначе раздел удвоился бы, и заметки соврали бы дважды."""
+    корень = _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Запись.\n"})
+    changelog.main(["--fold", "--version", "v0.1.0"])
+    (корень / changelog.FRAGMENTS / "8.fixed.md").write_text("Другая.\n", "utf-8")
+
+    assert changelog.main(["--fold", "--version", "v0.1.0"]) == changelog.EXIT_FAILED
+
+
+def test_складывать_нечего_это_отказ(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Выпуск без единой записи — повод остановиться, а не собрать пустое."""
+    _дерево_свода(tmp_path, monkeypatch)
+
+    assert changelog.main(["--fold", "--version", "v0.1.0"]) == changelog.EXIT_FAILED
+
+
+def test_новый_раздел_ложится_сверху(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Свежее читают первым; старые разделы остаются нетронутыми."""
+    корень = _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Первая.\n"})
+    changelog.main(["--fold", "--version", "v0.1.0"])
+    (корень / changelog.FRAGMENTS / "8.fixed.md").write_text("Вторая.\n", "utf-8")
+    changelog.main(["--fold", "--version", "v0.2.0"])
+
+    свод = (корень / changelog.JOURNAL).read_text(encoding="utf-8")
+
+    assert свод.index("## v0.2.0") < свод.index("## v0.1.0")
+    assert "Первая." in свод and "Вторая." in свод
+
+
+def test_раздел_версии_достаётся_целиком() -> None:
+    свод = (
+        "# Ж\n\n## v0.2.0\n\n### Исправлено\n\n- Вторая. (#8)\n"
+        "\n## v0.1.0\n\n- Первая. (#7)\n"
+    )
+
+    раздел = changelog.section(свод, "v0.2.0")
+
+    assert раздел is not None
+    assert "Вторая." in раздел
+    assert "Первая." not in раздел, "в раздел попали чужие записи"
+
+
+def test_раздела_нет_это_none() -> None:
+    assert changelog.section("# Ж\n\n## v0.1.0\n\n- Первая.\n", "v0.9.9") is None
+
+
+def test_последний_раздел_не_обрезается() -> None:
+    """Границей последнего раздела служит конец файла, а не следующий «##»."""
+    раздел = changelog.section("# Ж\n\n## v0.1.0\n\n- Первая. (#7)\n", "v0.1.0")
+
+    assert раздел is not None and "Первая." in раздел
+
+
+def test_заметки_выпуска_отказывают_без_раздела(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Раздела нет — значит фрагменты не сложены.
+
+    Собрать заметки «как-нибудь» здесь хуже отказа: публикация необратима, и
+    в выпуск уехали бы записи прошлого.
+    """
+    _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Запись.\n"})
+
+    assert changelog.main(["--section", "--version", "v0.1.0"]) == changelog.EXIT_FAILED
+
+
+def test_язык_проверяется_на_складывании(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Отказ переехал сюда из прогона выпуска — туда, где запись ещё правят."""
+    _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Bumped ruff to 0.6.\n"})
+
+    assert (
+        changelog.main(["--fold", "--strict", "--version", "v0.1.0"])
+        == changelog.EXIT_FAILED
+    )
