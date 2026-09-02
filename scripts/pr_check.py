@@ -140,17 +140,42 @@ def expected_workflows(root: Path, *, self_path: str = SELF_PATH) -> frozenset[s
     return frozenset(найдено - {self_path})
 
 
-def latest_by_path(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Свежий прогон на каждый путь workflow.
+def meaningful(run: dict[str, Any]) -> bool:
+    """Несёт ли прогон вердикт. Отменённый — не несёт.
 
-    Площадка отдаёт список от нового к старому, поэтому побеждает первый
-    встреченный: вытесненный concurrency-группой прогон не воскрешает
-    вчерашнее красное.
+    `cancelled` означает «не досчитали», а не «не прошло». Вытесненный
+    concurrency-группой прогон — обычное дело: метку навесили, событие пришло
+    заново, старый прогон убили. Считать это красным значит краснеть на
+    штатной работе площадки.
+    """
+    return run.get("status") != "completed" or run.get("conclusion") != "cancelled"
+
+
+def latest_by_path(runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Свежий ЗНАЧАЩИЙ прогон на каждый путь workflow.
+
+    ## Почему не просто «первый в списке»
+
+    Так и было написано — и покраснело на собственном PR через двадцать минут
+    после появления. Площадка отдала для `pr-metadata.yml` и `changelog.yml`
+    сначала **отменённый** прогон, а успешный — ниже по списку. Порядок выдачи
+    не гарантирует, что первым идёт тот, у которого есть вердикт.
+
+    Поэтому порядок задаётся здесь явно — по времени создания, — а отменённый
+    прогон уступает место любому значащему: он не «красный», он «без ответа».
+    Если значащего нет вовсе, остаётся отменённый, и вердикт по нему не
+    зелёный — иначе вытесненный набор сходил бы за пройденный.
     """
     последние: dict[str, dict[str, Any]] = {}
-    for run in runs:
+    по_времени = sorted(
+        runs, key=lambda r: str(r.get("created_at") or ""), reverse=True
+    )
+    for run in по_времени:
         путь = run.get("path")
-        if isinstance(путь, str) and путь not in последние:
+        if not isinstance(путь, str):
+            continue
+        текущий = последние.get(путь)
+        if текущий is None or (meaningful(run) and not meaningful(текущий)):
             последние[путь] = run
     return последние
 

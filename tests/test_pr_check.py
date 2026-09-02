@@ -203,6 +203,107 @@ def test_вытесненный_прогон_не_воскрешает_крас�
     assert итог.ok
 
 
+def test_отменённый_прогон_уступает_успешному() -> None:
+    """Живые данные, на которых первая редакция покраснела (#50).
+
+    Площадка отдала для `pr-metadata.yml` сначала ОТМЕНЁННЫЙ прогон, а
+    успешный — ниже по списку. «Первый в списке победил» взял отменённый, и
+    обязательная проверка покраснела на собственном PR через двадцать минут
+    после того, как была написана.
+
+    `cancelled` означает «не досчитали», а не «не прошло»: вытеснение
+    concurrency-группой — штатная работа площадки, метку навесили и событие
+    пришло заново.
+    """
+    прогоны = [
+        {
+            "path": ".github/workflows/ci.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:30:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-09-02T09:32:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:31:00Z",
+        },
+    ]
+
+    assert pr_check.verdict(прогоны, ЖДЁМ).ok
+
+
+def test_свежий_отказ_не_перебивается_старым_успехом() -> None:
+    """Обратная сторона: у отказа вердикт ЕСТЬ, и он свежее."""
+    прогоны = [
+        {
+            "path": ".github/workflows/ci.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:30:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:31:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "completed",
+            "conclusion": "failure",
+            "created_at": "2026-09-02T09:32:00Z",
+        },
+    ]
+
+    итог = pr_check.verdict(прогоны, ЖДЁМ)
+
+    assert not итог.ok and not итог.wait
+
+
+def test_все_прогоны_отменены_это_не_зелено() -> None:
+    """Значащего прогона нет вовсе — значит ничто не подтвердило голову."""
+    прогоны = [_run(п, conclusion="cancelled") for п in sorted(ЖДЁМ)]
+
+    итог = pr_check.verdict(прогоны, ЖДЁМ)
+
+    assert not итог.ok
+
+
+def test_идущий_прогон_важнее_старого_успеха() -> None:
+    """У нового прогона вердикт будет — значит его и ждём."""
+    прогоны: list[dict[str, Any]] = [
+        {
+            "path": ".github/workflows/ci.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:30:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-02T09:31:00Z",
+        },
+        {
+            "path": ".github/workflows/разметка.yml",
+            "status": "in_progress",
+            "conclusion": None,
+            "created_at": "2026-09-02T09:32:00Z",
+        },
+    ]
+
+    итог = pr_check.verdict(прогоны, ЖДЁМ)
+
+    assert not итог.ok and итог.wait
+
+
 def test_всё_зелено() -> None:
     итог = pr_check.verdict(_все_зелёные(), ЖДЁМ)
 
