@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_pr_metadata
 import repo_links
 import shell_ascii
+import version
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -655,6 +656,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    сведения = version.counted(ROOT)
+    if сведения is None:
+        # Третий исход, а не отказ (правило 039). Так клонирует облачное окно и
+        # `actions/checkout` без `fetch-depth: 0`: тегов не видно, и версия
+        # недостоверна — но дерево тут ни при чём, краснеть ему не за что.
+        warned.append(
+            "версия: тега схемы не видно, счёт недостоверен — git fetch --tags"
+        )
+    else:
+        тег, полная, сколько = сведения
+        имя_версии = f"версия ({полная}; с выпуска {тег} принято {сколько})"
+        расхождение = version.check(ROOT)
+        if расхождение:
+            failed.append((имя_версии, "\n".join(расхождение)))
+        else:
+            passed.append(имя_версии)
 
     ссылки = repo_links.check_tree(ROOT, files=файлы)
     имя_ссылок = f"перепись ссылок (адресов в списке {len(repo_links.АДРЕСА)})"
