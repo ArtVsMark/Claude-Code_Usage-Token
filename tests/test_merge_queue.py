@@ -142,11 +142,13 @@ class ФейковаяПлощадка:
         main_busy: bool = False,
         main_red: bool = False,
         behind_by: int = 0,
+        отказ: frozenset[int] = frozenset(),
     ) -> None:
         self.pulls = {p["number"]: p for p in pulls}
         self.main_busy = main_busy
         self.main_red = main_red
         self.behind_by = behind_by
+        self.отказ = отказ
         self.записи: list[tuple[str, str]] = []
         self.сравнения: list[str] = []
 
@@ -155,6 +157,15 @@ class ФейковаяПлощадка:
     ) -> Any:
         if method != "GET":
             self.записи.append((method, path))
+            if path.endswith("/merge"):
+                номер = int(path.rsplit("/", 2)[1])
+                if номер in self.отказ:
+                    raise gh_rest.GitHubError(
+                        method,
+                        path,
+                        merge_queue.MERGE_REFUSED,
+                        'Required status check "PR check" is expected',
+                    )
             return {}
         if path.endswith("/jobs"):
             # Джобы прогона ci — ровно то, что создаётся и на общей ветке, и
@@ -481,3 +492,63 @@ def test_удачный_мерж_отвечает_да(monkeypatch: pytest.Monke
     monkeypatch.setattr(gh_rest, "request", lambda *a, **k: {})
 
     assert merge_queue.merge("o/r", 54) is True
+
+
+def test_застрявшая_голова_не_держит_очередь(
+    площадка: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Отказ на голове пропускает её вперёд, а не запирает очередь навсегда.
+
+    Первая редакция ломалась после отказа: «правило „не больше одного мержа“
+    действует и когда первый не уехал». Рассуждение неверное. Правило про
+    вытеснение ожидающего прогона на `main`, а не уехавший PR прогона на
+    `main` не начинает — вытеснять нечем.
+
+    Цена ошибки — та самая, от которой заведён весь этот заход. Отказ держался
+    полтора часа и сам не проходит: расклинивает его новая голова, то есть
+    человек или окно. До тех пор застрявший #54 не давал бы уехать ни одному
+    PR за собой, а обход при этом был бы **зелёным**. Зелёное и стоящее хуже
+    красного: красное видно.
+    """
+    двойник = площадка(pulls=[_pull(1), _pull(2)], отказ=frozenset({1}))
+
+    merge_queue.run("o/r", "main", dry=False)
+
+    assert _мержи(двойник) == [
+        "/repos/o/r/pulls/1/merge",
+        "/repos/o/r/pulls/2/merge",
+    ], "после отказа на #1 очередь обязана попробовать #2"
+    assert "::warning::" in capsys.readouterr().out
+
+
+def test_после_удачного_мержа_очередь_всё_равно_останавливается(
+    площадка: Any,
+) -> None:
+    """Проход дальше — только после отказа, и это не отмена правила.
+
+    Уехавший PR начинает прогон на `main`; второй мерж вытеснил бы его, и тот
+    не начался бы вовсе. Поэтому проверяется именно пара: отказ пускает
+    очередь дальше, удача — останавливает.
+    """
+    двойник = площадка(pulls=[_pull(1), _pull(2), _pull(3)])
+
+    merge_queue.run("o/r", "main", dry=False)
+
+    assert _мержи(двойник) == ["/repos/o/r/pulls/1/merge"]
+
+
+def test_отказ_по_всем_готовым_называется_вслух(
+    площадка: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Обход, не сдвинувший ничего, обязан сказать почему и чем это лечится.
+
+    «двигать нечего» без перечня выглядело бы как пустая очередь — то есть
+    как штатная работа.
+    """
+    площадка(pulls=[_pull(1), _pull(2)], отказ=frozenset({1, 2}))
+
+    merge_queue.run("o/r", "main", dry=False)
+
+    вывод = capsys.readouterr().out
+    assert "#1, #2" in вывод, "перечень застрявших обязан быть в выводе"
+    assert "новой головой" in вывод
