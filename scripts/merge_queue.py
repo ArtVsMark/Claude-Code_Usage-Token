@@ -70,37 +70,27 @@ EXIT_FAILED = 1
 EXIT_BROKEN = 2
 
 
-#: Прогон, задающий эталонный набор проверок. Именно файл, а не «все прогоны
-#: на общей ветке»: см. `main_state`.
+#: Прогон, по которому судят о состоянии общей ветки: занята ли она и красная
+#: ли. Именно файл, а не «все прогоны на ветке» — обход очереди оставляет там
+#: свои, и они к цвету общей ветки отношения не имеют.
 CI_WORKFLOW = "ci.yml"
 
 
-def main_state(repo: str, branch: str) -> tuple[bool, bool, frozenset[str]]:
-    """Занят ли `main` прогоном, красный ли он и каков эталонный набор имён.
+def main_state(repo: str, branch: str) -> tuple[bool, bool]:
+    """Занят ли `main` прогоном и красный ли он.
 
-    Эталон — имена джобов последнего **завершённого** прогона `ci`.
-    Незавершённый ещё создаёт джобы, и брать имена из него значит объявить
-    эталоном половину.
+    ## Почему здесь больше нет эталона имён
 
-    ## Почему джобы прогона, а не check-runs коммита
+    Раньше эта функция отдавала третьим значением набор имён джобов последнего
+    прогона `ci` — эталон, с которым сверялись проверки PR. Эталон ломал любой
+    PR, который состав проверок **меняет**: подъём версии Python даёт другие
+    имена, эталон приходит из прошлого, вердикт «джобы не созданы» становится
+    вечным, и починить это в PR нельзя — чтобы эталон обновился, изменение
+    должно сначала уехать в общую ветку (#46).
 
-    Сначала эталон брался как check-runs коммита `main` — и это сделало
-    очередь неспособной смержить хоть что-нибудь.
-
-    Причина в том, что очередь **сама ходит по общей ветке** и оставляет там
-    свой check-run «подвинуть очередь». Он попадал в эталон, а на pull request
-    такой джоб не создаётся никогда: обход на PR не запускается. Значит у
-    любого PR вечно недоставало одного имени, вердикт всегда выходил «джобы не
-    созданы», и ни один PR не становился готовым.
-
-    Замер: за первые полчаса работы конвейер не смержил ни одного PR из трёх
-    зелёных.
-
-    Джобы прогона `ci` от этого свободны по построению: в них ровно то, что
-    создаётся и на общей ветке, и на изменении. Проверки, которые ходят только
-    по `pull_request` — разметка, запись changelog, — в эталон не попадают и не
-    должны: на общей ветке их нет вовсе. Красными они всё равно не пройдут —
-    цвет проверяется по **всем** check-runs головы PR, а не по эталону.
+    Полноту набора теперь удостоверяет обязательная проверка `PR check`: она
+    читает состав из дерева самого изменения и зеленеет, только когда прошли
+    все прогоны на его голове.
     """
     прогоны = gh_rest.request(
         "GET",
@@ -115,29 +105,13 @@ def main_state(repo: str, branch: str) -> tuple[bool, bool, frozenset[str]]:
 
     завершённые = [run for run in список if run.get("status") == "completed"]
     if not завершённые:
-        return busy, False, frozenset()
+        return busy, False
 
-    последний = завершённые[0]
-    red = последний.get("conclusion") not in {"success", "neutral", "skipped"}
-
-    run_id = последний.get("id")
-    имена: set[str] = set()
-    if isinstance(run_id, int):
-        ответ = gh_rest.request(
-            "GET", f"/repos/{repo}/actions/runs/{run_id}/jobs", params={"per_page": 100}
-        )
-        if isinstance(ответ, dict):
-            имена = {
-                job["name"]
-                for job in ответ.get("jobs", [])
-                if isinstance(job.get("name"), str)
-            }
-    return busy, red, frozenset(имена)
+    red = завершённые[0].get("conclusion") not in {"success", "neutral", "skipped"}
+    return busy, red
 
 
-def snapshot_for(
-    repo: str, number: int, expected: frozenset[str], *, busy: bool, red: bool
-) -> pr_ready.Snapshot:
+def snapshot_for(repo: str, number: int, *, busy: bool, red: bool) -> pr_ready.Snapshot:
     """Собрать снимок по одному PR.
 
     Полный объект берётся отдельным запросом: в списке PR нет ни `mergeable`,
@@ -161,7 +135,6 @@ def snapshot_for(
     return pr_ready.Snapshot(
         pull=pull,
         checks=checks,
-        expected=expected,
         main_busy=busy,
         main_red=red,
         behind_by=behind_by(repo, pull),
@@ -275,11 +248,10 @@ def run(repo: str, branch: str, *, dry: bool) -> int:
         print("очередь пуста: открытых PR нет")
         return 0
 
-    busy, red, expected = main_state(repo, branch)
+    busy, red = main_state(repo, branch)
     print(
         f"состояние {branch}: {'идёт прогон' if busy else 'прогонов нет'}, "
-        f"{'последний красный' if red else 'последний зелёный'}, "
-        f"эталон {len(expected)} имён"
+        f"{'последний красный' if red else 'последний зелёный'}"
     )
 
     if not dry:
@@ -287,7 +259,7 @@ def run(repo: str, branch: str, *, dry: bool) -> int:
 
     голова: int | None = None
     for номер in номера:
-        snapshot = snapshot_for(repo, номер, expected, busy=busy, red=red)
+        snapshot = snapshot_for(repo, номер, busy=busy, red=red)
         verdict = pr_ready.evaluate(snapshot)
         правки = reconcile_labels(repo, snapshot, verdict, dry=dry)
         хвост = f" · метки: {', '.join(правки)}" if правки else ""
