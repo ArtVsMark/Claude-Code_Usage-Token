@@ -30,8 +30,10 @@ on:
         required: true
         type: string
 
+# Создание выпуска на площадке требует записи содержимого. Прямой пуш в `main`
+# этим не открывается: ruleset требует pull request и обходов не имеет.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   # Два выпуска разом — это два пакета с одной версией, и второй проиграет
@@ -106,6 +108,30 @@ jobs:
             --version "$RELEASE_TAG" > release-notes.md
           echo "── заметки выпуска ──"
           cat release-notes.md
+
+      # ВЫПУСК НА ПЛОЩАДКЕ ИДЁТ ДО ИНДЕКСА, А НЕ ВМЕСТО НЕГО. Пока публикация
+      # на индекс не начата (решение: с 1.0), это ЕДИНСТВЕННОЕ, что от выпуска
+      # видит человек. Раньше заметки собирались и выбрасывались: файл
+      # `release-notes.md` жил до конца прогона и исчезал вместе с ним.
+      #
+      # Идемпотентно: повторный прогон по тому же тегу обновляет выпуск, а не
+      # падает на «уже существует». Прогон по тегу повторяется чаще, чем
+      # кажется, — тег переставляют, пока по нему ничего не опубликовано.
+      - name: выпуск на площадке
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --notes-file release-notes.md
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+            echo "выпуск $RELEASE_TAG обновлён"
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" \
+              --notes-file release-notes.md dist/*
+            echo "выпуск $RELEASE_TAG заведён"
+          fi
 
       # Секрета нет — предупреждаем и выходим, а не падаем: до выдачи токена
       # выпуск просто не публикуется, и это законное состояние, а не поломка.
