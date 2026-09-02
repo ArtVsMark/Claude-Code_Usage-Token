@@ -65,7 +65,7 @@ JSONL, одна строка — один замер, только дописы�
 | `cache_read` | 517 713 992 | 144 701 877 | транскрипт в 3,6× больше |
 
 Расхождение идёт в обе стороны — значит это не отставание и не подмножество.
-Разбор: [#52](https://github.com/ArtVsMark/claude-code-usage/issues/52).
+Разбор: [#52](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/52).
 
 Пока не известно, какую величину меряет каждый источник, **складывать их
 нельзя**, и заполнять пробел одного из другого — тоже. Поэтому каждая строка
@@ -83,10 +83,10 @@ JSONL, одна строка — один замер, только дописы�
 Состав полей менять нельзя задним числом: хранилище append-only, а замер —
 снимок на момент запроса. Не записанное сейчас не восстановится, и в накопленных
 данных навсегда останется граница, до которой расход учтён не полностью.
-Разбор и доводы — [#18](https://github.com/ArtVsMark/claude-code-usage/issues/18).
+Разбор и доводы — [#18](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/18).
 
 Хранилище — **приватный репозиторий**
-[`claude-code-usage-dat`](https://github.com/ArtVsMark/claude-code-usage-dat),
+[`Claude-Code_Usage-Data`](https://github.com/ArtVsMark/Claude-Code_Usage-Data),
 файл `samples/usage.jsonl` в `main`. Отдельная ветка не нужна: репозиторий и
 так только под данные.
 

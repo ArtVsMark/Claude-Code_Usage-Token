@@ -26,11 +26,11 @@ Closes #
 - [ ] `README.md` и `README.en.md` не разошлись по смыслу
 - [ ] новая цифра в выводе — названо, из чего получена
 - [ ] выстраданное правило записано в
-      [claude-code-playbook](https://github.com/ArtVsMark/claude-code-playbook)
+      [Engineering-Incidents-Playbook](https://github.com/ArtVsMark/Engineering-Incidents-Playbook)
 
 > ⚠️ **Первые три пункта пока нечем исполнить:** каркаса проекта нет, и все три
 > команды проходят «зелено» на пустоте — см.
-> [#17](https://github.com/ArtVsMark/claude-code-usage/issues/17). До его
+> [#17](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/17). До его
 > закрытия отмечайте их, только если запускали руками и было что запускать.
 
 <!-- Из форка: метки проставит мейнтейнер, русские артефакты тоже.

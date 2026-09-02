@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Путь до соседних скриптов достроен строкой выше: приставка ветки живёт в
 # гейте разметки, и второй раз её называть здесь нельзя — разойдётся молча.
 import check_pr_metadata
+import repo_links
 import shell_ascii
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -624,7 +625,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         (passed.append(check.name) if ok else failed.append((check.name, output)))
 
     try:
-        scan = scan_for_secrets(tracked_files())
+        файлы = tracked_files()
+        scan = scan_for_secrets(файлы)
     except (OSError, subprocess.CalledProcessError) as exc:
         # Отдельный код возврата: «проверку не удалось прогнать» — это не то же
         # самое, что «проверка нашла секрет», и путать их нельзя.
@@ -653,6 +655,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    ссылки = repo_links.check_tree(ROOT, files=файлы)
+    имя_ссылок = f"перепись ссылок (адресов в списке {len(repo_links.АДРЕСА)})"
+    свежесть = repo_links.список_свежий(
+        repo_links.АДРЕСА, из_прогона=repo_links.адрес_из_прогона()
+    )
+    if свежесть:
+        failed.append((имя_ссылок, свежесть))
+    elif ссылки:
+        failed.append((имя_ссылок, "\n".join(str(н) for н in ссылки)))
+    else:
+        passed.append(имя_ссылок)
 
     контракт = check_showcase(ROOT)
     имя_контракта = (

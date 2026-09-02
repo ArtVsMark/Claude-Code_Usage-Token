@@ -1,7 +1,7 @@
 {
   "schema": "1.0",
-  "project": "ArtVsMark/claude-code-usage",
-  "catalogue": "https://github.com/ArtVsMark/claude-code-playbook",
+  "project": "ArtVsMark/Claude-Code_Usage-Token",
+  "catalogue": "https://github.com/ArtVsMark/Engineering-Incidents-Playbook",
   "_": "Ответ ЭТОГО проекта по каждому правилу каталога. Статус — active, rejected, not-applicable или unreviewed; у двух отрицательных обязательна причина в поле why, у active — mechanism и where.",
   "_зачем": "Ответ живёт здесь, а не в каталоге, потому что здесь живёт механизм: одно правило в разных проектах держится по-разному.",
   "rules": {

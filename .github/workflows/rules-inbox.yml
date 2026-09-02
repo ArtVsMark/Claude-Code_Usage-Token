@@ -1,4 +1,4 @@
-# Входящие правила каталога ArtVsMark/claude-code-playbook.
+# Входящие правила каталога ArtVsMark/Engineering-Incidents-Playbook.
 #
 # Собрано `scripts/onboard_consumer.py` каталога — руками не правится целиком,
 # но закрепление тега и расписание менять можно и нужно осознанно.
@@ -35,6 +35,6 @@ jobs:
       # объявлены в задаче #21 и появились только в v1.1.0. На v1.0.0 прогон
       # работал бы молча по-старому, и расхождение обнаружилось бы не отказом,
       # а отсутствием строки, которую никто не ждёт увидеть отсутствующей.
-      - uses: ArtVsMark/claude-code-playbook@v1.1.0
+      - uses: ArtVsMark/Engineering-Incidents-Playbook@v1.1.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
