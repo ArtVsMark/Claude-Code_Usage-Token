@@ -10,9 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+import pr_check
 import pr_ready
 
-ЭТАЛОН = frozenset({"гейты · ubuntu-latest · python 3.12", "зона, тип и связь"})
+#: Проверки на голове PR. Обязательная `PR check` среди них: очередь требует
+#: именно её — она и отвечает за полноту набора (#46).
+НАБОР = frozenset(
+    {"гейты · ubuntu-latest · python 3.12", "зона, тип и связь", pr_check.SELF_NAME}
+)
 
 
 def _check(
@@ -22,7 +27,7 @@ def _check(
 
 
 def _зелёные() -> list[dict[str, Any]]:
-    return [_check(имя) for имя in sorted(ЭТАЛОН)]
+    return [_check(имя) for имя in sorted(НАБОР)]
 
 
 def _pull(**поля: Any) -> dict[str, Any]:
@@ -44,7 +49,6 @@ def _снимок(**поля: Any) -> pr_ready.Snapshot:
     параметры: dict[str, Any] = {
         "pull": _pull(),
         "checks": _зелёные(),
-        "expected": ЭТАЛОН,
         "main_busy": False,
         "main_red": False,
     }
@@ -58,7 +62,7 @@ def _снимок(**поля: Any) -> pr_ready.Snapshot:
 def test_зелёный_размеченный_pr_готов() -> None:
     вердикт = pr_ready.evaluate(_снимок())
     assert вердикт.state == pr_ready.READY
-    assert "проверок по уникальным именам 2" in вердикт.reasons[0]
+    assert "проверок по уникальным именам 3" in вердикт.reasons[0]
 
 
 def test_neutral_и_skipped_не_считаются_красными() -> None:
@@ -66,6 +70,7 @@ def test_neutral_и_skipped_не_считаются_красными() -> None:
     проверки = [
         _check("гейты · ubuntu-latest · python 3.12", "skipped"),
         _check("зона, тип и связь", "neutral"),
+        _check(pr_check.SELF_NAME, "neutral"),
     ]
     assert pr_ready.evaluate(_снимок(checks=проверки)).ready
 
@@ -79,12 +84,12 @@ def test_второй_комплект_проверок_не_воскрешае�
     красный run с тем же именем не должен перевесить новый зелёный.
     """
     свежие = _зелёные()
-    устаревшие = [_check(имя, "failure") for имя in sorted(ЭТАЛОН)]
+    устаревшие = [_check(имя, "failure") for имя in sorted(НАБОР)]
 
     вердикт = pr_ready.evaluate(_снимок(checks=свежие + устаревшие))
 
     assert вердикт.state == pr_ready.READY
-    assert "уникальным именам 2" in вердикт.reasons[0]
+    assert "уникальным именам 3" in вердикт.reasons[0]
 
 
 # ── три правила чтения проверок ───────────────────────────────────────────
@@ -100,13 +105,6 @@ def test_пустой_список_проверок_не_зелено() -> None:
     вердикт = pr_ready.evaluate(_снимок(checks=[]))
     assert вердикт.state == pr_ready.WAIT
     assert "CI не стартовал" in вердикт.reasons[0]
-
-
-def test_неполный_набор_не_зелено() -> None:
-    """Отсутствующее имя означает «джоб не создан» — тот же случай, что пустота."""
-    вердикт = pr_ready.evaluate(_снимок(checks=[_check("зона, тип и связь")]))
-    assert вердикт.state == pr_ready.WAIT
-    assert "джобы не созданы" in вердикт.reasons[0]
 
 
 def test_конфликт_не_ждут_а_метят() -> None:
@@ -154,23 +152,24 @@ def test_неотставшая_ветка_не_считается_отстав�
     assert pr_ready.evaluate(_снимок(behind_by=0)).ready
 
 
-def test_эталона_нет_судить_не_по_чему() -> None:
-    """Гейт, не нашедший предмета проверки, обязан отказать.
+def test_без_обязательной_проверки_это_ждать() -> None:
+    """`PR check` отвечает за полноту набора, поэтому её отсутствие — ожидание.
 
-    Без эталонного набора имён «все зелёные» означает «все, что создались», а
-    сколько их должно было создаться — неизвестно.
+    Эталона имён с общей ветки здесь больше нет: он ломал любой PR, который
+    состав проверок меняет (#46).
     """
-    вердикт = pr_ready.evaluate(_снимок(expected=frozenset()))
-    assert вердикт.state == pr_ready.BLOCKED
-    assert "эталонного набора" in вердикт.reasons[0]
+    без_неё = [c for c in _зелёные() if c["name"] != pr_check.SELF_NAME]
 
+    вердикт = pr_ready.evaluate(_снимок(checks=без_неё))
 
-# ── прочие отказы ─────────────────────────────────────────────────────────
+    assert вердикт.state == pr_ready.WAIT
+    assert pr_check.SELF_NAME in вердикт.reasons[0]
 
 
 def test_идущие_проверки_ждут() -> None:
     проверки = [
         _check("гейты · ubuntu-latest · python 3.12"),
+        _check(pr_check.SELF_NAME),
         _check("зона, тип и связь", "", "in_progress"),
     ]
     вердикт = pr_ready.evaluate(_снимок(checks=проверки))
@@ -181,6 +180,7 @@ def test_идущие_проверки_ждут() -> None:
 def test_красная_проверка_блокирует() -> None:
     проверки = [
         _check("гейты · ubuntu-latest · python 3.12"),
+        _check(pr_check.SELF_NAME),
         _check("зона, тип и связь", "failure"),
     ]
     вердикт = pr_ready.evaluate(_снимок(checks=проверки))
