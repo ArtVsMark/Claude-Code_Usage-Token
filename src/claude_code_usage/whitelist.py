@@ -60,10 +60,26 @@ LIMIT_FIELDS: dict[str, str] = {
     "resetsAt": "resets_at",
 }
 
+#: Откуда взято число. Поле заведено ДО первой записанной строки и по замеру,
+#: а не из аккуратности: реестр и транскрипт дают по одному и тому же окну
+#: разный расход, причём в обе стороны — `input` больше у реестра в 5,0 раза,
+#: `cache_read` больше у транскрипта в 3,6 раза (#52).
+#:
+#: Пока не известно, какую величину меряет каждый, складывать их нельзя, и
+#: заполнять пробел одного из другого — тоже. Без этого поля в append-only
+#: хранилище смешались бы две несопоставимые величины, и разделить их было бы
+#: нечем: строки не редактируются.
+SOURCES: frozenset[str] = frozenset({"registry", "transcript"})
+
+#: Числа, которых у транскрипта нет по природе. `cost_usd` отдаёт только
+#: реестр; считать его по ценам модели значило бы выдать оценку за факт, а
+#: писать нулём — соврать молча. Поэтому у транскриптных строк поля просто нет.
+REGISTRY_ONLY: frozenset[str] = frozenset({"cost_usd"})
+
 #: Всё, что вообще бывает в строке замера. Ни токенов, ни ключей, ни имён, ни
 #: путей — по построению, а не по недосмотру.
 SAMPLE_FIELDS: frozenset[str] = frozenset(
-    {"ts", "session", *USAGE_FIELDS.values(), *LIMIT_FIELDS.values()}
+    {"ts", "session", "source", *USAGE_FIELDS.values(), *LIMIT_FIELDS.values()}
 )
 
 
@@ -115,11 +131,36 @@ def build_sample(
             "append-only"
         )
 
-    замер: dict[str, Any] = {"ts": ts, "session": session_id}
+    замер: dict[str, Any] = {"ts": ts, "session": session_id, "source": "registry"}
     for исходное, наше in LIMIT_FIELDS.items():
         замер[наше] = limit.get(исходное)
     for исходное, наше in USAGE_FIELDS.items():
         замер[наше] = usage[исходное]
+    return замер
+
+
+def build_transcript_sample(
+    numbers: dict[str, int], *, ts: str, session_id: str
+) -> dict[str, Any]:
+    """Собрать строку замера из сложенного транскрипта.
+
+    Состав полей отличается от реестрового, и это не небрежность:
+
+    * **нет `cost_usd`** — транскрипт его не несёт (см. `REGISTRY_ONLY`);
+    * **нет состояния светофора** — оно приходит только с записью реестра, а
+      выдумывать его нечем: `type`, `status` и `resets_at` тут отсутствуют.
+
+    Строка поэтому годится для суммы расхода, но не для калибровочной точки —
+    и читатель это видит по `source`, а не по отсутствию полей, которое можно
+    принять за потерю.
+    """
+    неизвестные = sorted(set(numbers) - set(USAGE_FIELDS.values()))
+    if неизвестные:
+        raise UnknownUsageFieldError(неизвестные)
+
+    замер: dict[str, Any] = {"ts": ts, "session": session_id, "source": "transcript"}
+    for имя in sorted(set(USAGE_FIELDS.values()) - REGISTRY_ONLY):
+        замер[имя] = numbers.get(имя, 0)
     return замер
 
 
