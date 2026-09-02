@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Утечка секрета или замера
-    url: https://github.com/ArtVsMark/claude-code-usage/security/advisories/new
+    url: https://github.com/ArtVsMark/Claude-Code_Usage-Token/security/advisories/new
     about: Приватно, не публичным issue — публичный issue увеличивает утечку.
   - name: Как участвовать
-    url: https://github.com/ArtVsMark/claude-code-usage/blob/main/CONTRIBUTING.md
+    url: https://github.com/ArtVsMark/Claude-Code_Usage-Token/blob/main/CONTRIBUTING.md
     about: Инварианты, гейты, метки, язык. English contributions welcome as they are.
   - name: Спецификация
-    url: https://github.com/ArtVsMark/claude-code-usage/blob/main/docs/spec.md
+    url: https://github.com/ArtVsMark/Claude-Code_Usage-Token/blob/main/docs/spec.md
     about: Что измеряется, как из этого получается остаток и чего проект не обещает.

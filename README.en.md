@@ -1,6 +1,6 @@
-# claude-code-usage
+# Claude-Code_Usage-Token
 
-[![Version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2Fclaude-code-usage%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
+[![Version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
 
 **How much of your Claude Code limits is actually left — as a number, not a traffic light.**
 
@@ -82,7 +82,7 @@ which open with an English note.
 
 **The project's rules come from a shared catalogue.** The body of rules worked
 to here lives in
-[claude-code-playbook](https://github.com/ArtVsMark/claude-code-playbook): 162
+[Engineering-Incidents-Playbook](https://github.com/ArtVsMark/Engineering-Incidents-Playbook): 162
 entries, each with its incident and its limits. This project's answer — for
 every rule, not just the ones somebody got to — is in
 [`.rules/bindings.json`](.rules/bindings.json): accepted and what holds it ·
@@ -94,9 +94,9 @@ proposed back to the catalogue in
 
 Early development: **the problem statement and the rules are written down,
 the scaffold is in place, the behaviour is not.** Order of work: epics
-[#1](https://github.com/ArtVsMark/claude-code-usage/issues/1) (sample → report
+[#1](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/1) (sample → report
 → calibrate) and
-[#3](https://github.com/ArtVsMark/claude-code-usage/issues/3) (pre-launch
+[#3](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/3) (pre-launch
 infrastructure).
 
 The tool will not report a percentage until it has collected calibration

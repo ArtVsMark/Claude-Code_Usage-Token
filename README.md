@@ -1,6 +1,6 @@
-# claude-code-usage
+# Claude-Code_Usage-Token
 
-[![Версия](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2Fclaude-code-usage%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
+[![Версия](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
 
 **Сколько на самом деле осталось от лимитов Claude Code — в цифрах, а не в светофоре.**
 
@@ -75,7 +75,7 @@ Append-only строки сливаются без конфликтов, даж�
 | [`.rules/bindings.json`](.rules/bindings.json) | ответ проекта по каждому правилу общего каталога |
 
 **Правила проекта — из общего каталога.** Свод, по которому здесь работают,
-ведётся в [claude-code-playbook](https://github.com/ArtVsMark/claude-code-playbook):
+ведётся в [Engineering-Incidents-Playbook](https://github.com/ArtVsMark/Engineering-Incidents-Playbook):
 162 записи, каждая с инцидентом и границами применимости. Ответ этого проекта —
 по каждому правилу, а не по тем, до которых дошли руки — лежит в
 [`.rules/bindings.json`](.rules/bindings.json): принято и чем держится ·
@@ -86,9 +86,9 @@ Append-only строки сливаются без конфликтов, даж�
 
 Ранняя разработка: **постановка и правила записаны, каркас заведён, поведения
 пока нет.** Порядок работ — эпики
-[#1](https://github.com/ArtVsMark/claude-code-usage/issues/1) (замер → отчёт →
+[#1](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/1) (замер → отчёт →
 калибровка) и
-[#3](https://github.com/ArtVsMark/claude-code-usage/issues/3) (инфраструктура
+[#3](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/3) (инфраструктура
 до запуска).
 
 Остаток в процентах инструмент начнёт показывать не раньше, чем наберёт

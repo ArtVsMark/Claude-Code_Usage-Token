@@ -11,7 +11,7 @@
 
 | Что | Значение |
 |---|---|
-| приватный репозиторий | у мейнтейнера — [`claude-code-usage-dat`](https://github.com/ArtVsMark/claude-code-usage-dat); у стороннего человека — свой |
+| приватный репозиторий | у мейнтейнера — [`Claude-Code_Usage-Data`](https://github.com/ArtVsMark/Claude-Code_Usage-Data); у стороннего человека — свой |
 | файл `samples/usage.jsonl` | может быть пустым, но должен существовать и быть закоммичен |
 | `.gitattributes` со строкой слияния | без неё замеры из двух окон дадут конфликт |
 | право записи из **обоих** окон | локального и облачного |
@@ -54,7 +54,7 @@ samples/usage.jsonl merge=union
 личный скрипт.
 
 Конкретное имя переменной и формат конфига появятся вместе с командой `sample`
-— [#2](https://github.com/ArtVsMark/claude-code-usage/issues/2).
+— [#2](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/2).
 
 ## Как проверить, что подготовлено верно
 
@@ -83,7 +83,7 @@ samples/usage.jsonl merge=union
 где-то хранить.
 
 Вопрос разбирается в
-[#2](https://github.com/ArtVsMark/claude-code-usage/issues/2) вместе с самой
+[#2](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/2) вместе с самой
 командой. До его решения замеры копятся только из локального окна — и это
 отдельная причина не доверять ранней шкале: она построена по неполной сумме, о
-чём говорит [#13](https://github.com/ArtVsMark/claude-code-usage/issues/13).
+чём говорит [#13](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/13).
