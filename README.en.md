@@ -92,8 +92,10 @@ proposed back to the catalogue in
 
 ## Status
 
-Early development: **the problem statement and the rules are written down,
-the scaffold is in place, the behaviour is not.** Order of work: epics
+Early development. The **first command works — `sample`**: it takes a
+measurement and appends it to the private store. Report and calibrate are not
+there yet, and they refuse out loud rather than returning emptiness. Order of
+work: epics
 [#1](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/1) (sample → report
 → calibrate) and
 [#3](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/3) (pre-launch
@@ -102,6 +104,12 @@ infrastructure).
 The tool will not report a percentage until it has collected calibration
 points; until then it says "the scale is not calibrated". That is the intended
 behaviour, not a missing feature.
+
+Only a **window** can take a measurement: the session registry lives in MCP,
+and a Python process cannot reach it by construction. So the window dumps the
+registry response to a file and the tool parses it — details in
+[`docs/spec.md`](docs/spec.md), store preparation in
+[`docs/storage-setup.md`](docs/storage-setup.md).
 
 ## License
 
