@@ -422,3 +422,55 @@ def test_очередь_просыпается_от_всех_проверок_pr
 
     assert по_pull_request, "не нашлось ни одного workflow, ходящего по pull_request"
     assert _будильники_очереди() == по_pull_request
+
+
+# ── отказ площадки на мерже — не отказ обхода (#55) ───────────────────────
+
+
+def test_отказ_по_правилам_площадки_не_красит_обход(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Замер: проверка позеленела в 10:09:24, очередь попросила мерж в 10:09:28.
+
+    Площадка отказала — её вычисление ruleset не догнало, — и обход выходил
+    кодом 2, крася `main`. Красное из-за секундного отставания приучает читать
+    красное как шум.
+    """
+
+    def отказ(метод: str, путь: str, **прочее: Any) -> Any:
+        raise gh_rest.GitHubError(
+            метод, путь, 405, '{"message":"Required status check is expected."}'
+        )
+
+    monkeypatch.setattr(gh_rest, "request", отказ)
+
+    поехал = merge_queue.merge("o/r", 54)
+
+    assert поехал is False
+    вывод = capsys.readouterr().out
+    assert "::warning::" in вывод, "отказ обязан быть виден, а не проглочен"
+    assert "#54 не поехал" in вывод
+    assert "следующий попробует снова" in вывод
+
+
+def test_чужая_ошибка_на_мерже_остаётся_отказом(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Тихого запасного пути нет: 403 и 500 — это поломка, а не «не в этот раз».
+
+    Иначе очередь молча не мержила бы ничего при отозванных правах.
+    """
+
+    def отказ(метод: str, путь: str, **прочее: Any) -> Any:
+        raise gh_rest.GitHubError(метод, путь, 403, '{"message":"Forbidden"}')
+
+    monkeypatch.setattr(gh_rest, "request", отказ)
+
+    with pytest.raises(gh_rest.GitHubError):
+        merge_queue.merge("o/r", 54)
+
+
+def test_удачный_мерж_отвечает_да(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gh_rest, "request", lambda *a, **k: {})
+
+    assert merge_queue.merge("o/r", 54) is True
