@@ -78,6 +78,17 @@ which open with an English note.
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | invariants, gates, labels, language |
 | [`SECURITY.md`](SECURITY.md) | what is collected, where it goes, how to report a leak |
 | [`HISTORY.md`](HISTORY.md) | why the project exists and which decisions are settled |
+| [`.rules/bindings.json`](.rules/bindings.json) | this project's answer for every rule of the shared catalogue |
+
+**The project's rules come from a shared catalogue.** The body of rules worked
+to here lives in
+[claude-code-playbook](https://github.com/ArtVsMark/claude-code-playbook): 162
+entries, each with its incident and its limits. This project's answer — for
+every rule, not just the ones somebody got to — is in
+[`.rules/bindings.json`](.rules/bindings.json): accepted and what holds it ·
+rejected and why · no subject here · not yet reviewed. Rules born here are
+proposed back to the catalogue in
+[`.rules/proposals.json`](.rules/proposals.json).
 
 ## Status
 
