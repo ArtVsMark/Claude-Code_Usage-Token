@@ -179,6 +179,60 @@ def render(фрагменты: Sequence[Fragment], version: str) -> str:
     return "\n".join(строки).rstrip() + "\n"
 
 
+#: Свод — накопленный журнал. Фрагменты складываются в него при подготовке
+#: версии и на этом расходуются: иначе заметки следующего выпуска повторили бы
+#: прошлые целиком (#49).
+JOURNAL = "CHANGELOG.md"
+
+#: Шапка свода. Пишется один раз, при первом складывании.
+JOURNAL_HEAD = (
+    "# Журнал изменений\n"
+    "\n"
+    "Разделы складываются из фрагментов `changelog.d/` при подготовке версии —\n"
+    "см. [`docs/release.md`](docs/release.md). Руками сюда не пишут: запись\n"
+    "приезжает вместе с изменением, а не сочиняется после выпуска.\n"
+)
+
+_SECTION_RE = re.compile(r"^## (?P<version>\S+)\s*$", re.MULTILINE)
+
+
+def section(journal: str, version: str) -> str | None:
+    """Раздел свода для версии — или `None`, если его нет.
+
+    `None` при выпуске означает отказ: раздела нет — значит фрагменты не
+    сложены, и заметки собрались бы из чужих записей.
+    """
+    границы = list(_SECTION_RE.finditer(journal))
+    for номер, начало in enumerate(границы):
+        if начало.group("version") != version:
+            continue
+        конец = границы[номер + 1].start() if номер + 1 < len(границы) else len(journal)
+        return journal[начало.start() : конец].rstrip() + "\n"
+    return None
+
+
+def fold(root: Path, фрагменты: Sequence[Fragment], version: str) -> tuple[str, int]:
+    """Сложить фрагменты в свод и израсходовать их.
+
+    Возвращает новый текст свода и число израсходованных файлов. Сам файл
+    здесь не пишется: решение «писать ли» принимает вызывающий, а функция
+    остаётся проверяемой на подделанном дереве.
+    """
+    путь = root / JOURNAL
+    прежний = путь.read_text(encoding="utf-8") if путь.is_file() else JOURNAL_HEAD
+    if section(прежний, version) is not None:
+        raise ValueError(
+            f"раздел {version} в {JOURNAL} уже есть — складывать второй раз "
+            "значит удвоить записи"
+        )
+    шапка, _, хвост = прежний.partition("## ")
+    свежий = render(фрагменты, version)
+    собранный = шапка.rstrip() + "\n\n" + свежий
+    if хвост:
+        собранный += "\n## " + хвост.rstrip() + "\n"
+    return собранный, len(фрагменты)
+
+
 def changed_files(argv: Sequence[str]) -> list[str]:
     """Файлы изменения — списком из аргументов, а не запросом к площадке.
 
@@ -216,7 +270,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     парсер.add_argument(
         "--render", action="store_true", help="напечатать собранный раздел"
     )
+    парсер.add_argument(
+        "--fold",
+        action="store_true",
+        help=f"сложить фрагменты в {JOURNAL} и удалить их (подготовка версии)",
+    )
+    парсер.add_argument(
+        "--section",
+        action="store_true",
+        help=f"напечатать раздел версии из {JOURNAL} (заметки выпуска)",
+    )
     аргументы = парсер.parse_args(list(argv) if argv is not None else None)
+
+    if аргументы.section:
+        путь = ROOT / JOURNAL
+        свод = путь.read_text(encoding="utf-8") if путь.is_file() else ""
+        раздел = section(свод, аргументы.version)
+        if раздел is None:
+            print(
+                f"::error::в {JOURNAL} нет раздела {аргументы.version}. "
+                "Фрагменты складываются в свод при подготовке версии — иначе "
+                "заметки собрались бы из записей прошлого выпуска",
+                file=sys.stderr,
+            )
+            return EXIT_FAILED
+        print(раздел)
+        return 0
 
     фрагменты, претензии = collect(ROOT)
     замечания = language_warnings(фрагменты)
@@ -249,6 +328,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_FAILED
+
+    if аргументы.fold:
+        if not фрагменты:
+            print(
+                f"::error::складывать нечего: в {FRAGMENTS}/ нет записей. "
+                "Выпуск без единой записи — повод остановиться и посмотреть, "
+                "а не собрать пустой раздел",
+                file=sys.stderr,
+            )
+            return EXIT_FAILED
+        try:
+            собранный, сложено = fold(ROOT, фрагменты, аргументы.version)
+        except ValueError as exc:
+            print(f"::error::{exc}", file=sys.stderr)
+            return EXIT_FAILED
+        (ROOT / JOURNAL).write_text(собранный, encoding="utf-8")
+        for фрагмент in фрагменты:
+            фрагмент.path.unlink()
+        print(f"сложено в {JOURNAL}: раздел {аргументы.version}, записей {сложено}")
+        return 0
 
     хвост = f", замечаний {len(замечания)}" if замечания else ""
     print(f"записей {len(фрагменты)}{хвост}")
