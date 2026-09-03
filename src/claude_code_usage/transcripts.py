@@ -42,12 +42,35 @@
 Поэтому здесь незнакомое **считается и называется**, а не роняет и не
 пропускается молча: число попадает в охват, и читатель видит, что источник
 изменился.
+
+## Один ответ — одна строка? Нет (#52)
+
+Транскрипт пишет **по строке на блок содержимого** ответа: текст, рассуждение,
+каждый вызов инструмента. И `usage` в них стоит ОДИН И ТОТ ЖЕ — не доля, а
+полный расход всего ответа. Сложение строк подряд множит его на число блоков.
+
+Замер 2026-09-03 на живом окне: 267 строк с `usage` на **132 ответа** — по 1–4
+строки на ответ. Расход завышался втрое:
+
+| число | по строкам | по ответам |
+|---|---:|---:|
+| `output` | 257 434 | 115 291 |
+| `cache_read` | 52 241 255 | 26 698 822 |
+
+Ровно это и было главной частью расхождения с реестром, которое #52 принял за
+«источники меряют разные величины»: отношение 3,0–5,5× схлопнулось до 1,35–1,5×
+после дедупликации. Проверено и то, что усечения не требуется: `usage` у всех
+строк одного ответа совпадает побайтно — 0 расхождений на 267 строках.
+
+Поэтому ответ считается **по идентификатору**, а не по строке, а число
+отброшенных повторов попадает в охват: без него дедупликация неотличима от
+источника, в котором повторов не было.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -89,6 +112,27 @@ class Totals:
     first_ts: str = ""
     last_ts: str = ""
     numbers: dict[str, int] = field(default_factory=dict)
+    seen: set[str] = field(default_factory=set)
+
+    def новый(self, ключи: Sequence[str]) -> bool:
+        """Первый ли это раз для такого ответа.
+
+        Ключей два, и совпадения ЛЮБОГО достаточно: у одной строки может быть
+        `message.id`, у соседней — только `requestId`, и требование совпасть
+        по одному и тому же полю пропустило бы дубль. Найдено тестом, а не
+        рассуждением: подделка из двух строк одного ответа, у второй без `id`,
+        считалась дважды.
+
+        Без ключей вовсе отвечает «да»: такая строка неотличима от
+        самостоятельного ответа. Ошибка в эту сторону завышает и **видна в
+        охвате**, в другую — теряет расход молча.
+        """
+        if not ключи:
+            return True
+        if any(ключ in self.seen for ключ in ключи):
+            return False
+        self.seen.update(ключи)
+        return True
 
     def add(self, usage: dict[str, object], ts: str) -> set[str]:
         """Сложить один ответ. Возвращает незнакомые поля этого ответа."""
@@ -115,6 +159,7 @@ class Coverage:
     files: int = 0
     lines: int = 0
     counted: int = 0
+    duplicates: int = 0
     unreadable: int = 0
     unknown_fields: set[str] = field(default_factory=set)
 
@@ -127,7 +172,8 @@ class Coverage:
         )
         return (
             f"транскриптов {self.files}, строк {self.lines}, "
-            f"с расходом {self.counted}, нечитаемых {self.unreadable}{хвост}"
+            f"с расходом {self.counted}, повторов ответа {self.duplicates}, "
+            f"нечитаемых {self.unreadable}{хвост}"
         )
 
 
@@ -168,6 +214,28 @@ def _records(path: Path) -> Iterator[tuple[dict[str, object] | None, bool]]:
             )
 
 
+def _ответ(message: dict[str, object], запись: dict[str, object]) -> list[str]:
+    """Чем отождествляется ответ модели: `message.id` и `requestId`.
+
+    Оба, а не один на выбор: у соседних строк одного ответа набор полей бывает
+    разным, и совпасть они обязаны хоть по чему-нибудь. Пространства разведены
+    приставкой, чтобы `id` одного ответа не совпал с `requestId` другого.
+
+    Граница: если один запрос когда-нибудь даст ДВА разных ответа, они
+    склеятся, и расход будет занижен. На замере 2026-09-03 соответствие
+    строгое — 132 `requestId` на 132 `message.id`, — но это замер, а не
+    гарантия источника.
+    """
+    ключи = []
+    значение = message.get("id")
+    if isinstance(значение, str) and значение:
+        ключи.append(f"msg:{значение}")
+    значение = запись.get("requestId")
+    if isinstance(значение, str) and значение:
+        ключи.append(f"req:{значение}")
+    return ключи
+
+
 def scan(paths: Iterable[Path]) -> tuple[dict[str, Totals], Coverage]:
     """Сложить расход по сессиям из перечисленных транскриптов."""
     итоги: dict[str, Totals] = {}
@@ -189,6 +257,11 @@ def scan(paths: Iterable[Path]) -> tuple[dict[str, Totals], Coverage]:
                 continue
             ts = запись.get("timestamp")
             итог = итоги.setdefault(session, Totals(session=session))
+            if not итог.новый(_ответ(message, запись)):
+                # Тот же ответ другим блоком содержимого: `usage` в нём полный,
+                # а не доля, и сложение множило бы расход на число блоков.
+                охват.duplicates += 1
+                continue
             охват.unknown_fields |= итог.add(usage, ts if isinstance(ts, str) else "")
             охват.counted += 1
 

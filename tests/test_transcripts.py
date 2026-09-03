@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from claude_code_usage import transcripts, whitelist
 
 #: Форма записи, снятая с живого транскрипта. Лишние поля оставлены нарочно:
 #: они и есть то, что читатель обязан пропускать, не спотыкаясь.
-ЖИВАЯ_ЗАПИСЬ = {
+ЖИВАЯ_ЗАПИСЬ: dict[str, Any] = {
     "parentUuid": "…",
     "isSidechain": False,
     "type": "assistant",
@@ -30,7 +31,13 @@ from claude_code_usage import transcripts, whitelist
     "sessionId": "e06f1808-5efc-53c7-b8c8-5645ba1103c7",
     "cwd": "/home/user/claude-code-usage",
     "gitBranch": "agent/transcripts-13",
+    # `requestId` и `message.id` — то, чего этой подделке НЕ ХВАТАЛО, и потому
+    # двойной счёт по блокам содержимого не ловился ничем (#52). Настоящая
+    # запись их несёт всегда; подделка без них проверяла замысел, а не форму.
+    "requestId": "req_011Ceg5L3nyMeiot",
+    "apiBlockIndex": 0,
     "message": {
+        "id": "msg_011Ceg5L4ozV2uApHD37cB4x",
         "model": "claude-opus-5",
         "role": "assistant",
         "usage": {
@@ -69,13 +76,25 @@ def _файл(каталог: Path, имя: str, записи: list[object]) -> 
 # ── чтение ────────────────────────────────────────────────────────────────
 
 
+def _другой_ответ(**поля: object) -> dict[str, object]:
+    """Копия живой записи, но это ДРУГОЙ ответ модели — со своими ключами.
+
+    Раньше здесь хватало смены отметки времени. Теперь нет, и это не
+    придирка к оформлению: две строки с одним `message.id` — один ответ,
+    записанный по блокам содержимого, и складывать их дважды нельзя (#52).
+    """
+    запись = dict(ЖИВАЯ_ЗАПИСЬ, requestId="req_второй", **поля)
+    запись["message"] = dict(ЖИВАЯ_ЗАПИСЬ["message"], id="msg_второй")
+    return запись
+
+
 def test_расход_складывается_по_сессиям(tmp_path: Path) -> None:
-    вторая = dict(ЖИВАЯ_ЗАПИСЬ, timestamp="2026-09-02T10:00:00.000Z")
+    вторая = _другой_ответ(timestamp="2026-09-02T10:00:00.000Z")
     _файл(tmp_path / "проект", "a.jsonl", [ЖИВАЯ_ЗАПИСЬ, вторая])
 
     итоги, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
 
-    итог = итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]]  # type: ignore[index]
+    итог = итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]]
     assert итог.messages == 2
     assert итог.numbers == {
         "input": 4,
@@ -95,7 +114,7 @@ def test_лишние_поля_usage_не_считаются_незнакомы�
     """
     итог = transcripts.Totals(session="s")
 
-    незнакомые = итог.add(ЖИВАЯ_ЗАПИСЬ["message"]["usage"], "")  # type: ignore[index]
+    незнакомые = итог.add(ЖИВАЯ_ЗАПИСЬ["message"]["usage"], "")
 
     assert незнакомые == set()
 
@@ -242,3 +261,80 @@ def test_замер_реестра_тоже_помечен_источником(
 
     assert замер["source"] == "registry"
     assert замер["source"] in whitelist.SOURCES
+
+
+# ── один ответ — несколько строк (#52) ────────────────────────────────────
+#
+# Транскрипт пишет по строке на блок содержимого: текст, рассуждение, каждый
+# вызов инструмента. `usage` в них стоит ОДИН И ТОТ ЖЕ — полный расход ответа,
+# а не доля. Замер 2026-09-03: 267 строк на 132 ответа, расход завышался втрое.
+
+
+def _блок(индекс: int) -> dict[str, object]:
+    """Ещё одна строка ТОГО ЖЕ ответа: свой uuid, общий `message.id`."""
+    return dict(ЖИВАЯ_ЗАПИСЬ, uuid=f"блок-{индекс}", apiBlockIndex=индекс)
+
+
+def test_строки_одного_ответа_складываются_один_раз(tmp_path: Path) -> None:
+    """Ровно инцидент: расход множился на число блоков содержимого."""
+    _файл(tmp_path / "проект", "a.jsonl", [_блок(0), _блок(1), _блок(2)])
+
+    итоги, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    итог = итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]]
+    assert итог.messages == 1, "три строки — это один ответ"
+    assert итог.numbers["output"] == 168, "расход ответа, а не утроенный"
+    assert охват.counted == 1
+    assert охват.duplicates == 2
+
+
+def test_повторы_называются_в_охвате(tmp_path: Path) -> None:
+    """Без числа отброшенных дедупликация неотличима от источника без повторов.
+
+    Та же причина, по которой охват вообще печатается: «сложено 1» без «из
+    3 строк» не даёт понять, что произошло — и молчаливая потеря расхода
+    выглядела бы точно так же.
+    """
+    _файл(tmp_path / "проект", "a.jsonl", [_блок(0), _блок(1)])
+
+    _, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert "повторов ответа 1" in str(охват)
+
+
+def test_разные_ответы_складываются_оба(tmp_path: Path) -> None:
+    """Дедупликация не должна съедать соседние ответы: ключ у них разный."""
+    _файл(tmp_path / "проект", "a.jsonl", [ЖИВАЯ_ЗАПИСЬ, _другой_ответ()])
+
+    итоги, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]].numbers["output"] == 336
+    assert охват.duplicates == 0
+
+
+def test_ключ_запроса_годится_когда_ключа_ответа_нет(tmp_path: Path) -> None:
+    """Два ключа, а не один: у старых записей `message.id` может не быть."""
+    без_id = dict(_блок(1))
+    без_id["message"] = {к: з for к, з in ЖИВАЯ_ЗАПИСЬ["message"].items() if к != "id"}
+    _файл(tmp_path / "проект", "a.jsonl", [ЖИВАЯ_ЗАПИСЬ, без_id])
+
+    _, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert охват.duplicates == 1, "requestId у обеих строк общий — это один ответ"
+
+
+def test_запись_без_ключей_считается_а_не_теряется(tmp_path: Path) -> None:
+    """Ошибка в сторону завышения — видимая; в сторону потери — молчаливая.
+
+    Строка без обоих идентификаторов неотличима от самостоятельного ответа.
+    Пропустить её значило бы потерять расход и никак этого не показать, а
+    посчитать — завысить на величину, которая видна в охвате.
+    """
+    голая = {к: з for к, з in ЖИВАЯ_ЗАПИСЬ.items() if к != "requestId"}
+    голая["message"] = {к: з for к, з in ЖИВАЯ_ЗАПИСЬ["message"].items() if к != "id"}
+    _файл(tmp_path / "проект", "a.jsonl", [голая, dict(голая, uuid="вторая")])
+
+    итоги, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]].messages == 2
+    assert охват.duplicates == 0
