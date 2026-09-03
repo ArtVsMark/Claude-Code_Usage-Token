@@ -114,6 +114,7 @@ def _git(*args: str, root: Path = ROOT) -> str | None:
             # трети матрицы — и только если в выводе попалась нужная буква.
             encoding="utf-8",
             check=False,
+            timeout=30,
         )
     except OSError:
         return None

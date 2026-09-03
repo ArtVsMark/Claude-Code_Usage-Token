@@ -139,6 +139,7 @@ def test_гейт_отдаёт_ненулевой_код() -> None:
             "GITHUB_REPOSITORY": "ArtVsMark/Ne-Sushchestvuyet",
             "PATH": "/usr/bin:/bin",
         },
+        timeout=30,
     )
 
     assert ответ.returncode == repo_links.EXIT_FAILED

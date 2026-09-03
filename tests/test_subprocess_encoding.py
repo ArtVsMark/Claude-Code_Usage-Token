@@ -105,7 +105,7 @@ def test_свой_обход_без_предмета_это_не_чисто(tmp_
     Иначе переезд каталога тихо его отключит, и «чисто» будет означать
     «ничего не проверяли» — неотличимо от зелёного.
     """
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, timeout=30)
 
     результат = subprocess_encoding.check_tree(tmp_path)
 
@@ -134,6 +134,7 @@ def _прогон(cwd: Path) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        timeout=30,
     )
 
 
@@ -144,10 +145,10 @@ def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None
     git, и подделка, лежащая рядом с ним, но не добавленная, не проверялась бы
     вовсе — тест был бы зелёным на выключенном гейте.
     """
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, timeout=30)
     подделка = tmp_path / "плохо.py"
     подделка.write_text('subprocess.run(["git"], text=True)\n', encoding="utf-8")
-    subprocess.run(["git", "add", "плохо.py"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "плохо.py"], cwd=tmp_path, check=True, timeout=30)
 
     ответ = _прогон(tmp_path)
 

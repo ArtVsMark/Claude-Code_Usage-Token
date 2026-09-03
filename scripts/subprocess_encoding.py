@@ -138,6 +138,56 @@ def _имя_функции(node: ast.Call) -> str | None:
     return None
 
 
+def импорты_subprocess(дерево: ast.AST) -> tuple[frozenset[str], dict[str, str]]:
+    """Чем в ЭТОМ файле зовётся `subprocess`: модуль и имена, взятые из него.
+
+    Возвращает (имена модуля, отображение «местное имя → исходное»).
+    `import subprocess as sp` даёт модулю имя `sp`; `from subprocess import run
+    as запустить` кладёт `{"запустить": "run"}` — псевдоним обязан вести к
+    исходному имени, иначе он прячет функцию от списка проверяемых.
+
+    Без этого разбора гейт судит по последнему звену — и `pr_check.run(...)`,
+    своя функция с тем же именем, становится ложной находкой. У проверки
+    кодировки это не проявлялось по счастливой случайности: у своих функций
+    нет `text=`, то есть не срабатывал триггер. У проверки дедлайна триггера
+    нет, и случайность кончилась (#95).
+    """
+    модули: set[str] = set()
+    функции: dict[str, str] = {}
+    for узел in ast.walk(дерево):
+        if isinstance(узел, ast.Import):
+            for имя in узел.names:
+                if имя.name == "subprocess":
+                    модули.add(имя.asname or имя.name)
+        elif isinstance(узел, ast.ImportFrom) and узел.module == "subprocess":
+            for имя in узел.names:
+                функции[имя.asname or имя.name] = имя.name
+    return frozenset(модули), функции
+
+
+def из_subprocess(
+    node: ast.Call, *, модули: frozenset[str], функции: dict[str, str]
+) -> str | None:
+    """ИСХОДНОЕ имя функции `subprocess` в этом вызове — или `None`.
+
+    `subprocess.run(…)` → `"run"`, если модуль импортирован под этим именем.
+    `запустить(…)` → `"run"`, если имя взято `from subprocess import run as …`.
+    `pr_check.run(…)` → `None`: `pr_check` не имя модуля subprocess.
+
+    Возвращается имя, а не «да/нет», потому что список проверяемых функций у
+    каждого гейта свой, а сверять его надо с исходным именем: псевдоним иначе
+    прячет функцию, и гейт молчит там, где обязан говорить.
+    """
+    if isinstance(node.func, ast.Attribute):
+        владелец = node.func.value
+        if isinstance(владелец, ast.Name) and владелец.id in модули:
+            return node.func.attr
+        return None
+    if isinstance(node.func, ast.Name):
+        return функции.get(node.func.id)
+    return None
+
+
 def check_text(text: str, path: str) -> list[Находка]:
     """Найти вызовы без кодировки в одном исходнике.
 
@@ -190,6 +240,7 @@ def python_files(root: Path, *, files: Sequence[Path] | None = None) -> list[Pat
         text=True,
         encoding="utf-8",
         check=True,
+        timeout=30,
     )
     return [root / имя for имя in ответ.stdout.split("\0") if имя.endswith(".py")]
 

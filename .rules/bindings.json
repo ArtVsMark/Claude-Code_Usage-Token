@@ -13,7 +13,7 @@
     "002": {
       "status": "active",
       "mechanism": "document",
-      "where": "CLAUDE.md — каждое правило называет гейт, который его держит: scripts/check_pr_metadata.py, scripts/pr_check.py, scripts/shell_ascii.py, scripts/changelog.py, scripts/repo_links.py, scripts/subprocess_encoding.py, scripts/utf8_output.py, scripts/rules_answer.py, scripts/concurrency_head.py. Правило без механизма остаётся, только если механизма нет по природе, и тогда это сказано вслух."
+      "where": "CLAUDE.md — каждое правило называет гейт, который его держит: scripts/check_pr_metadata.py, scripts/pr_check.py, scripts/shell_ascii.py, scripts/changelog.py, scripts/repo_links.py, scripts/subprocess_encoding.py, scripts/utf8_output.py, scripts/rules_answer.py, scripts/concurrency_head.py, scripts/subprocess_timeout.py. Правило без механизма остаётся, только если механизма нет по природе, и тогда это сказано вслух."
     },
     "003": {
       "status": "active",
@@ -502,8 +502,8 @@
     },
     "100": {
       "status": "active",
-      "mechanism": "none",
-      "where": "НЕ ДЕРЖИТСЯ НИЧЕМ, и это находка разбора. Замер 2026-09-03: 11 вызовов subprocess.run и Popen в scripts/ и src/, ни одного с timeout=. Единственная защита — timeout-minutes у джоба, то есть дедлайн на ВЕСЬ прогон в 5–15 минут вместо секунд на вызов; локально у человека нет и этого. Дыра не теоретическая: git push в чужой приватный репозиторий при истёкшем ключе ждёт ввода с терминала, которого в прогоне нет. Разбор и две ступени починки — задача #95."
+      "mechanism": "gate",
+      "where": "scripts/subprocess_timeout.py, src/claude_code_usage/storage.py и scripts/preflight.py. Дедлайн назван у КАЖДОГО вызова подпроцесса, и названо именно значение, а не одинаковое число: локальной команде git — десять секунд, сетевым push и pull — сто двадцать, прогону всего набора тестов — девятьсот. Причину лечит вторая половина: GIT_TERMINAL_PROMPT=0 в окружении git, без которого он при истёкшем ключе ждёт ввода с терминала, которого в прогоне нет, — дедлайн остаётся вторым слоем. Замер, ради которого гейт заведён: 48 вызовов в дереве, ни одного с timeout=."
     },
     "101": {
       "status": "active",

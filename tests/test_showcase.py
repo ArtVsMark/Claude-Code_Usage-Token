@@ -630,9 +630,9 @@ def test_причина_не_строка(tmp_path: Path) -> None:
 
 def _дерево_с_тегом(каталог: Path, тег: str | None) -> Path:
     """Дерево под версией, при желании с тегом выпуска."""
-    subprocess.run(["git", "init", "-q"], cwd=каталог, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=каталог, check=True, timeout=30)
     _файл(каталог, "файл.txt", "содержимое\n")
-    subprocess.run(["git", "add", "."], cwd=каталог, check=True)
+    subprocess.run(["git", "add", "."], cwd=каталог, check=True, timeout=30)
     subprocess.run(
         [
             "git",
@@ -646,9 +646,10 @@ def _дерево_с_тегом(каталог: Path, тег: str | None) -> Pat
         ],
         cwd=каталог,
         check=True,
+        timeout=30,
     )
     if тег is not None:
-        subprocess.run(["git", "tag", тег], cwd=каталог, check=True)
+        subprocess.run(["git", "tag", тег], cwd=каталог, check=True, timeout=30)
     return каталог
 
 

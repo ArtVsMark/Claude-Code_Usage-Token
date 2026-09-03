@@ -33,7 +33,9 @@ from claude_code_usage import cli, storage, whitelist
 
 
 def _git(где: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(где), *args], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(где), *args], check=True, capture_output=True, timeout=30
+    )
 
 
 @pytest.fixture
@@ -43,12 +45,14 @@ def склад(tmp_path: Path) -> Path:
         ["git", "init", "-q", "--bare", "-b", "main", str(удалёнка)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     место = tmp_path / "store"
     subprocess.run(
         ["git", "clone", "-q", str(удалёнка), str(место)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     _git(место, "checkout", "-q", "-b", "main")
     _git(место, "config", "user.email", "t@e.st")
