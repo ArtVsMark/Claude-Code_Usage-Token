@@ -101,11 +101,13 @@ Early development. The **first command is built — `sample`**: it takes a
 measurement and appends it to the private store. Report and calibrate are not
 there yet, and they refuse out loud rather than returning emptiness.
 
-**The command has never been run end to end on real material:** not a single
-measurement has been written to a store, and everything known about it comes
-from forged data in tests. The most expensive class of defect here — writing to
-someone's private repository, committing and pushing — has only been checked
-that way.
+**Half of it has now been run on real material.** Transcript collection was
+exercised against a live transcript on 2026-09-03 — 3833 lines, 650 responses —
+and the very first run found a defect: the output said nothing about 572
+discarded duplicates, that is 47% of the lines carrying usage. The registry half
+and the write to storage have **never been run**: not a single measurement has
+been written, and the most expensive class of defect here is writing to
+someone's private repository, committing and pushing.
 
 Order of work: epics
 [#1](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/1) (sample → report
