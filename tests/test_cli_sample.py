@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from claude_code_usage import cli, storage, whitelist
+from conftest import ЖИВАЯ_ЗАПИСЬ
 
 ЗАПИСЬ: dict[str, Any] = {
     "id": "session_A",
@@ -204,6 +205,42 @@ def test_неполнота_выгрузки_попадает_в_вывод(
     cli.main(_замер(файл, склад, "--dry-run"))
 
     assert "НЕПОЛНАЯ" in capsys.readouterr().out
+
+
+def test_повторы_ответа_попадают_в_вывод_команды(
+    tmp_path: Path, склад: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Проверяется вывод команды, а не `Coverage.__str__`.
+
+    Соседний тест в `test_transcripts.py` смотрел на строку, которую печатает
+    сам охват, и был зелёным — а команда строила свою и повторы теряла. На
+    настоящем транскрипте это скрывало 572 отброшенные строки из 1222, то есть
+    47%: человек видел «с расходом 650» и не знал, что дедупликация выбросила
+    почти столько же.
+    """
+    первый = json.dumps(ЖИВАЯ_ЗАПИСЬ, ensure_ascii=False)
+    # Тот же ответ вторым блоком содержимого: `message.id` и `requestId`
+    # совпадают, `usage` в обоих ПОЛНЫЙ, а не доля.
+    второй = json.dumps(dict(ЖИВАЯ_ЗАПИСЬ, apiBlockIndex=1), ensure_ascii=False)
+    проект = tmp_path / "проект"
+    проект.mkdir()
+    (проект / "сессия.jsonl").write_text(f"{первый}\n{второй}\n", encoding="utf-8")
+
+    код = cli.main(
+        [
+            "sample",
+            "--transcripts",
+            "--transcripts-root",
+            str(tmp_path),
+            "--store",
+            str(склад),
+            "--dry-run",
+        ]
+    )
+
+    напечатано = capsys.readouterr().out
+    assert код == 0
+    assert "повторов ответа 1" in напечатано, напечатано
 
 
 # ── запись ────────────────────────────────────────────────────────────────
