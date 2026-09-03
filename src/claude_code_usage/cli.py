@@ -137,7 +137,12 @@ def _sample(аргументы: argparse.Namespace) -> int:
             print("хранилище не готово:", file=sys.stderr)
             for беда in беды:
                 print(f"  — {беда}", file=sys.stderr)
-            print("  подготовка: docs/storage-setup.md", file=sys.stderr)
+            # Ссылкой, а не путём: у того, кто поставил пакет, каталога
+            # docs/ нет вовсе — автор видит репозиторий, пользователь пакет.
+            print(
+                "  подготовка: https://github.com/ArtVsMark/Claude-Code_Usage-Token/blob/main/docs/storage-setup.md",
+                file=sys.stderr,
+            )
             return EXIT_USAGE
 
     метка = now_stamp()
