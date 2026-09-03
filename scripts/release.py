@@ -35,6 +35,8 @@ import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 EXIT_FAILED = 1
 EXIT_BROKEN = 2
 
@@ -152,6 +154,8 @@ def check_wheel(path: Path, package_version: str) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     парсер = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     парсер.add_argument("--tag", required=True, help="тег выпуска, вида v0.1.0")
     парсер.add_argument("--version", required=True, help="версия пакета")

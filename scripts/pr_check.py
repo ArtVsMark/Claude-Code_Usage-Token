@@ -56,6 +56,7 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import gh_rest
+from utf8_output import force_utf8_output
 
 #: Имя обязательной проверки. Совпадает с контекстом в ruleset **дословно** и
 #: меняться не должно: переименование здесь равно снятию защиты с общей ветки,
@@ -279,6 +280,8 @@ def fetch_runs(repo: str, sha: str) -> list[dict[str, Any]]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     парсер = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     парсер.add_argument("--sha", required=True, help="голова PR")
     парсер.add_argument("--repo", default="", help="owner/repo")

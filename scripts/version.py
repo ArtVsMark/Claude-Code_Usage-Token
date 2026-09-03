@@ -68,6 +68,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 ROOT = Path(__file__).resolve().parent.parent
 
 EXIT_FAILED = 1
@@ -236,6 +238,8 @@ def check(root: Path = ROOT) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     parser = argparse.ArgumentParser(description="Версия по схеме MAJOR.MINOR.PATCH")
     parser.add_argument("--check", action="store_true", help="сверить литерал с тегом")
     parser.add_argument("--released", action="store_true", help="только выпущенную")

@@ -39,6 +39,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 EXIT_FAILED = 1
 
 #: Присваивание в начале строки, возможно с `export`/`local`/`declare`.
@@ -208,6 +210,8 @@ def check_workflows(root: Path) -> list[Finding]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     корень = Path(argv[0]) if argv else Path(__file__).resolve().parent.parent
     findings = check_workflows(корень)
     for находка in findings:
