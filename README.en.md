@@ -97,10 +97,17 @@ proposed back to the catalogue in
 
 ## Status
 
-Early development. The **first command works — `sample`**: it takes a
+Early development. The **first command is built — `sample`**: it takes a
 measurement and appends it to the private store. Report and calibrate are not
-there yet, and they refuse out loud rather than returning emptiness. Order of
-work: epics
+there yet, and they refuse out loud rather than returning emptiness.
+
+**The command has never been run end to end on real material:** not a single
+measurement has been written to a store, and everything known about it comes
+from forged data in tests. The most expensive class of defect here — writing to
+someone's private repository, committing and pushing — has only been checked
+that way.
+
+Order of work: epics
 [#1](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/1) (sample → report
 → calibrate) and
 [#3](https://github.com/ArtVsMark/Claude-Code_Usage-Token/issues/3) (pre-launch
