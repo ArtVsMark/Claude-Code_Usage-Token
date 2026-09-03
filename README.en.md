@@ -11,10 +11,12 @@
 > a gap in it is named rather than omitted: of the ten questions **one** is
 > answered by a live number, the other nine are named with a reason. There is no
 > **CI** badge — the platform reports run state itself, and a second source of
-> the same thing drifts from the first silently. There are no **release** or
-> **PyPI** badges — the project has never been released, the subject does not
-> exist. There is no **coverage** badge — coverage is not measured here, and a
-> number filled in by hand would freeze on the very next change.
+> the same thing drifts from the first silently. There is no **release**
+> badge — the platform lists releases itself, on the Releases tab. There is no
+> **PyPI** badge — nothing is published there before `1.0`, and that is the
+> owner's decision rather than a gap. There is no **coverage** badge — coverage
+> is not measured here, and a number filled in by hand would freeze on the very
+> next change.
 >
 > The gap is named because a missing badge and a frozen badge look
 > **identical** from the outside. This is held by the `scripts/preflight.py`
