@@ -13,7 +13,7 @@
     "002": {
       "status": "active",
       "mechanism": "document",
-      "where": "CLAUDE.md — каждое правило называет гейт, который его держит: scripts/check_pr_metadata.py, scripts/pr_check.py, scripts/shell_ascii.py, scripts/changelog.py, scripts/repo_links.py, scripts/subprocess_encoding.py, scripts/utf8_output.py, scripts/rules_answer.py. Правило без механизма остаётся, только если механизма нет по природе, и тогда это сказано вслух."
+      "where": "CLAUDE.md — каждое правило называет гейт, который его держит: scripts/check_pr_metadata.py, scripts/pr_check.py, scripts/shell_ascii.py, scripts/changelog.py, scripts/repo_links.py, scripts/subprocess_encoding.py, scripts/utf8_output.py, scripts/rules_answer.py, scripts/concurrency_head.py. Правило без механизма остаётся, только если механизма нет по природе, и тогда это сказано вслух."
     },
     "003": {
       "status": "active",

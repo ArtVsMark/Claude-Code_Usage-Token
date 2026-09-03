@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Путь до соседних скриптов достроен строкой выше: приставка ветки живёт в
 # гейте разметки, и второй раз её называть здесь нельзя — разойдётся молча.
 import check_pr_metadata
+import concurrency_head
 import repo_links
 import rules_answer
 import shell_ascii
@@ -692,6 +693,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    группы = concurrency_head.check_workflows(ROOT)
+    имя_групп = "группа отмены называет голову"
+    if группы:
+        failed.append((имя_групп, "\n".join(str(н) for н in группы)))
+    else:
+        passed.append(имя_групп)
 
     ответ = rules_answer.check_tree(ROOT)
     имя_ответа = (

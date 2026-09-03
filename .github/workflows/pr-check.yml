@@ -46,7 +46,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: pr-check-${{ github.event.pull_request.number }}
+  # ГОЛОВА В ИМЕНИ ГРУППЫ — НЕ УКРАШЕНИЕ. Без неё прогоны на РАЗНЫХ коммитах
+  # попадают в одну группу, и вытеснить может более новый: события площадки
+  # приходят не в том порядке, в каком сделаны коммиты. Замер на #87 —
+  # `labeled` встал в очередь до `synchronize`, а доставлен после и принёс
+  # устаревшую голову; выжил он, посчитал старый коммит, а на актуальном
+  # обязательной проверки не осталось вовсе. Держит scripts/concurrency_head.py.
+  group: pr-check-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: true
 
 jobs:
