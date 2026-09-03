@@ -66,6 +66,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 EXIT_FAILED = 1
 EXIT_BROKEN = 2
 
@@ -230,6 +232,8 @@ def check_tree(root: Path, *, files: Sequence[Path] | None = None) -> Резул
 
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
+
+    force_utf8_output()
 
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--root", default=".", help="корень дерева")

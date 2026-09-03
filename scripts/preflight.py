@@ -36,6 +36,7 @@ import repo_links
 import shell_ascii
 import subprocess_encoding
 import version
+from utf8_output import force_utf8_output
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -587,26 +588,6 @@ def report(
             f"отказов {len(failed)}{хвост})",
         ]
     )
-
-
-def force_utf8_output() -> None:
-    """Заставить свои потоки говорить UTF-8.
-
-    Вывод здесь русский, а кодировка потока по умолчанию берётся из локали. На
-    Windows это не UTF-8, и отчёт выходит нечитаемым: ``\\u0442\\u0435...``
-    вместо «тесты» либо мойибаке. Падения при этом нет — потоки заменяют
-    непредставимое молча, — и в том вся неприятность: команда, смысл которой в
-    том, чтобы **назвать** отказавшее, перестаёт называть что-либо, оставаясь
-    формально работающей.
-
-    Чинится в инструменте, а не переменной окружения в CI: иначе прогон в
-    облаке стал бы читаемым, а окно, в котором работают руками, осталось бы
-    слепым — ровно та слепая зона, о которой предупреждает роль 🔧 Разработчика.
-    """
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
