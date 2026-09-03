@@ -176,6 +176,21 @@ def _контракт(
         ".github/workflows/example.yml",
         "name: пример\njobs:\n  x:\n    steps:\n      - run: files=1\n",
     )
+    # Ответ каталогу правил — по той же причине: гейт `rules_answer` отказывает
+    # на дереве без него, потому что молчание вместо ответа неотличимо от
+    # согласия со всеми правилами сразу.
+    _файл(
+        каталог,
+        ".rules/bindings.json",
+        json.dumps(
+            {
+                "schema": "1.1",
+                "project": "Владелец/Проект",
+                "rules": {"001": {"status": "unreviewed"}},
+            },
+            ensure_ascii=False,
+        ),
+    )
     return каталог
 
 

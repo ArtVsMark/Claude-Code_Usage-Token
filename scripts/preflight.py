@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # гейте разметки, и второй раз её называть здесь нельзя — разойдётся молча.
 import check_pr_metadata
 import repo_links
+import rules_answer
 import shell_ascii
 import subprocess_encoding
 import utf8_output
@@ -691,6 +692,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    ответ = rules_answer.check_tree(ROOT)
+    имя_ответа = (
+        f"ответ каталогу разрешим (записей {ответ.записей}, "
+        f"с адресом {ответ.с_адресом})"
+    )
+    if ответ.находки:
+        failed.append((имя_ответа, "\n".join(str(н) for н in ответ.находки)))
+    else:
+        passed.append(имя_ответа)
 
     потоки = utf8_output.check_tree(ROOT, files=файлы)
     имя_потоков = f"UTF-8 на потоках запускаемого (проверено {потоки.examined})"
