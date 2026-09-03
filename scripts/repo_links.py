@@ -187,9 +187,9 @@ def check_tree(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    import argparse
-
     force_utf8_output()
+
+    import argparse
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", default=".", help="корень дерева")

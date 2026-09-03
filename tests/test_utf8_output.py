@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +17,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import utf8_output
+
+КОРЕНЬ = Path(__file__).resolve().parents[1]
 
 
 def test_потоки_переводятся_в_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,3 +83,129 @@ def test_кириллица_доходит_до_узкого_потока_чит
     поток.flush()
 
     assert буфер.getvalue().decode("utf-8") == строка
+
+
+# ── гейт: скрипт обязан ставить UTF-8 первым делом ────────────────────────
+#
+# Подделки — строковые литералы исходника, а не файлы в `scripts/`: гейт ходит
+# по этому каталогу, и настоящий скрипт-подделка покраснел бы на собственном
+# дереве. Та же ловушка, что у переписи ссылок и у проверки на секреты.
+
+_ЗАПУСК = 'if __name__ == "__main__":\n    raise SystemExit(main())\n'
+
+
+def _находки(тело: str) -> list[str]:
+    return [н.message for н in utf8_output.check_text(тело + _ЗАПУСК, "с.py")]
+
+
+def test_скрипт_без_вызова_краснеет() -> None:
+    """Ровно инцидент: семь скриптов печатали по-русски и кодировку не ставили."""
+    находки = _находки("def main() -> int:\n    print('отказ')\n    return 1\n\n\n")
+
+    assert len(находки) == 1
+    assert "не зовёт" in находки[0]
+
+
+def test_вызов_первым_делом_молчит() -> None:
+    тело = (
+        "def main() -> int:\n"
+        "    force_utf8_output()\n"
+        "    print('отказ')\n"
+        "    return 1\n\n\n"
+    )
+    assert _находки(тело) == []
+
+
+def test_вызов_после_печати_это_отказ() -> None:
+    """Порядок, а не наличие: вызов после первой печати бесполезен.
+
+    Найдено гейтом на собственном дереве, до того как он был дописан:
+    `preflight` печатал отказ «не принимаю аргументов» раньше, чем ставил
+    кодировку, — единственный отказ, который команда выдаёт до всякой работы.
+    """
+    тело = (
+        "def main() -> int:\n"
+        "    print('отказ')\n"
+        "    force_utf8_output()\n"
+        "    return 1\n\n\n"
+    )
+    находки = _находки(тело)
+
+    assert len(находки) == 1
+    assert "не первым делом" in находки[0]
+
+
+def test_вызов_в_main_блоке_не_считается() -> None:
+    """`main()` зовут и тесты, и другой код — тогда кодировки не будет.
+
+    Так было в `preflight`: при запуске файлом вывод читаемый, при вызове
+    `main([])` — нет, и разницу между двумя способами запуска не видно.
+    """
+    тело = "def main() -> int:\n    print('отказ')\n    return 1\n\n\n"
+    хвост = 'if __name__ == "__main__":\n    force_utf8_output()\n    main()\n'
+    находки = [н.message for н in utf8_output.check_text(тело + хвост, "с.py")]
+
+    assert len(находки) == 1
+    assert "вне main" in находки[0]
+
+
+def test_библиотека_не_предмет() -> None:
+    """Без блока запуска потоки не его: библиотеку никто не запускает процессом."""
+    assert (
+        utf8_output.check_text("def полезное() -> int:\n    return 1\n", "б.py") == []
+    )
+
+
+def test_скрипт_без_кириллицы_не_предмет() -> None:
+    """Требование — про русский вывод, а не про форму `main`.
+
+    Скрипт, печатающий только ASCII, от кодировки локали не страдает, и
+    краснеть на нём значило бы наказывать за то, чего не случится.
+    """
+    тело = "def main() -> int:\n    print('ok')\n    return 0\n\n\n"
+    assert _находки(тело) == []
+
+
+def test_дерево_проекта_чистое() -> None:
+    """Не подделка: настоящие `scripts/`.
+
+    Замер 2026-09-03 до правки — семь скриптов без вызова вовсе, плюс три
+    находки о порядке и месте вызова у тех, что его уже имели.
+    """
+    результат = utf8_output.check_tree(КОРЕНЬ)
+
+    assert результат.находки == []
+    assert результат.examined > 0, "гейт обязан назвать охват, а не только «чисто»"
+
+
+def test_чужое_перечисление_гейт_не_судит() -> None:
+    """Пустой список от вызывающего — законное состояние, а не поломка."""
+    результат = utf8_output.check_tree(КОРЕНЬ, files=[])
+
+    assert результат.находки == []
+    assert результат.examined == 0
+
+
+def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None:
+    """Гейт, который нельзя провалить, — не гейт (правило 075)."""
+    каталог = tmp_path / "scripts"
+    каталог.mkdir()
+    (каталог / "плохой.py").write_text(
+        "def main() -> int:\n    print('отказ')\n    return 1\n\n\n" + _ЗАПУСК,
+        encoding="utf-8",
+    )
+
+    ответ = subprocess.run(
+        [
+            sys.executable,
+            str(КОРЕНЬ / "scripts" / "utf8_output.py"),
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert ответ.returncode == utf8_output.EXIT_FAILED
+    assert "плохой.py" in ответ.stdout

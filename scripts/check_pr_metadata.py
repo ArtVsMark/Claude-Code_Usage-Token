@@ -49,6 +49,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Канонический документ по меткам: и состав зон, и состав типов берутся оттуда.
@@ -296,6 +298,8 @@ def evaluate(event: dict[str, object], nomenclature: Nomenclature) -> Verdict:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Прочитать событие и вернуть ненулевой код, если разметки не хватает."""
+    force_utf8_output()
+
     аргументы = list(argv or [])
     путь = аргументы[0] if аргументы else os.environ.get("GITHUB_EVENT_PATH", "")
     if not путь:

@@ -45,6 +45,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import gh_rest
 import pr_ready
+from utf8_output import force_utf8_output
 
 #: Метки конвейера с описаниями. Описание обязательно: метка без него
 #: выглядит как обещание, смысл которого знает только тот, кто её завёл.
@@ -360,6 +361,8 @@ def run(repo: str, branch: str, *, dry: bool) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     парсер = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     парсер.add_argument("--branch", default="main", help="общая ветка")
     парсер.add_argument(
