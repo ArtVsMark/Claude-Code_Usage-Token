@@ -693,7 +693,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         passed.append(имя_shell)
 
     потоки = utf8_output.check_tree(ROOT, files=файлы)
-    имя_потоков = f"UTF-8 на потоках скриптов (проверено {потоки.examined})"
+    имя_потоков = f"UTF-8 на потоках запускаемого (проверено {потоки.examined})"
     if потоки.находки:
         failed.append((имя_потоков, "\n".join(str(н) for н in потоки.находки)))
     else:
