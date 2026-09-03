@@ -211,6 +211,7 @@ def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None
         capture_output=True,
         text=True,
         encoding="utf-8",
+        timeout=30,
     )
 
     assert ответ.returncode == rules_answer.EXIT_FAILED

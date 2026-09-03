@@ -139,6 +139,7 @@ def tracked_files(root: Path) -> list[Path]:
         text=True,
         encoding="utf-8",
         check=True,
+        timeout=30,
     )
     return [root / имя for имя in ответ.stdout.split("\0") if имя]
 

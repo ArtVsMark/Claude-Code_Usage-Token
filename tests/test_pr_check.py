@@ -319,7 +319,11 @@ def test_ждёт_и_дожидается() -> None:
     паузы: list[float] = []
 
     итог = pr_check.run(
-        lambda: ответы.pop(0), ЖДЁМ, attempts=5, interval=7, sleep=паузы.append
+        lambda: ответы.pop(0),
+        ЖДЁМ,
+        attempts=5,
+        interval=7,
+        sleep=паузы.append,
     )
 
     assert итог.ok

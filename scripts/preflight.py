@@ -37,6 +37,7 @@ import repo_links
 import rules_answer
 import shell_ascii
 import subprocess_encoding
+import subprocess_timeout
 import utf8_output
 import version
 from utf8_output import force_utf8_output
@@ -112,6 +113,7 @@ def tracked_files() -> list[Path]:
         text=True,
         encoding="utf-8",
         check=True,
+        timeout=30,
     ).stdout
     return [ROOT / line for line in out.split("\0") if line]
 
@@ -560,6 +562,15 @@ def check_showcase(root: Path) -> ShowcaseContract:
 # ── прогон ────────────────────────────────────────────────────────────────
 
 
+#: Дедлайн одной проверки. Здесь он длинный намеренно: сюда попадает прогон
+#: ВСЕГО набора тестов, а он идёт минуты. Умолчание у остальных вызовов
+#: короткое — правило требует названного значения, а не одинакового (#95).
+#:
+#: Пятнадцать минут — не с потолка: столько же стоит `timeout-minutes` у джоба
+#: гейтов, и превышать его бессмысленно — раннер убьёт прогон раньше.
+CHECK_TIMEOUT = 900
+
+
 def run_check(check: Check) -> tuple[bool, str]:
     """Прогнать одну проверку. Вернуть «прошла ли» и её вывод."""
     proc = subprocess.run(
@@ -569,6 +580,7 @@ def run_check(check: Check) -> tuple[bool, str]:
         text=True,
         encoding="utf-8",
         errors="replace",
+        timeout=CHECK_TIMEOUT,
     )
     return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
 
@@ -588,6 +600,7 @@ def current_branch() -> str:
             text=True,
             encoding="utf-8",
             check=False,
+            timeout=30,
         )
     except OSError:
         return ""
@@ -717,6 +730,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_потоков, "\n".join(str(н) for н in потоки.находки)))
     else:
         passed.append(имя_потоков)
+
+    дедлайны = subprocess_timeout.check_tree(ROOT, files=файлы)
+    имя_дедлайнов = f"дедлайн вызова назван (исходников {дедлайны.examined})"
+    if дедлайны.находки:
+        failed.append((имя_дедлайнов, "\n".join(str(н) for н in дедлайны.находки)))
+    else:
+        passed.append(имя_дедлайнов)
 
     кодировки = subprocess_encoding.check_tree(ROOT, files=файлы)
     имя_кодировок = f"кодировка подпроцессов названа (исходников {кодировки.examined})"

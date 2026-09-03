@@ -19,7 +19,9 @@ import version
 
 
 def _git(где: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(где), *args], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(где), *args], check=True, capture_output=True, timeout=30
+    )
 
 
 @pytest.fixture
@@ -29,6 +31,7 @@ def репозиторий(tmp_path: Path) -> Path:
         ["git", "init", "-q", "-b", "main", str(tmp_path)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     _git(tmp_path, "config", "user.email", "t@e.st")
     _git(tmp_path, "config", "user.name", "Тест")
@@ -101,6 +104,7 @@ def test_без_тега_версия_недостоверна_а_не_ноль(
         ["git", "init", "-q", "-b", "main", str(tmp_path)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
 
     assert version.counted(tmp_path) is None
@@ -118,6 +122,7 @@ def test_отказ_называет_что_делать(
         ["git", "init", "-q", "-b", "main", str(tmp_path)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     monkeypatch.setattr(version, "ROOT", tmp_path)
 
@@ -203,6 +208,7 @@ def test_без_тега_сверять_нечего(tmp_path: Path) -> None:
         ["git", "init", "-q", "-b", "main", str(tmp_path)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
 
     assert version.check(tmp_path) == []

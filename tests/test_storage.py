@@ -18,7 +18,9 @@ from claude_code_usage import storage
 
 
 def _git(где: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(где), *args], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(где), *args], check=True, capture_output=True, timeout=30
+    )
 
 
 @pytest.fixture
@@ -29,12 +31,14 @@ def хранилище(tmp_path: Path) -> Path:
         ["git", "init", "-q", "--bare", "-b", "main", str(удалёнка)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     склад = tmp_path / "store"
     subprocess.run(
         ["git", "clone", "-q", str(удалёнка), str(склад)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     _git(склад, "checkout", "-q", "-b", "main")
     _git(склад, "config", "user.email", "t@e.st")
@@ -243,6 +247,7 @@ def test_два_окна_пишут_одновременно_и_обе_стро�
         ["git", "clone", "-q", str(tmp_path / "remote.git"), str(второе)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     _git(второе, "config", "user.email", "b@e.st")
     _git(второе, "config", "user.name", "Б")
@@ -261,6 +266,7 @@ def test_два_окна_пишут_одновременно_и_обе_стро�
         ["git", "clone", "-q", str(tmp_path / "remote.git"), str(итог)],
         check=True,
         capture_output=True,
+        timeout=30,
     )
     записанные = storage.read_rows(итог)
     assert len(записанные) == 2, "union обязан дать обе строки, а не одну"

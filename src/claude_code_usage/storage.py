@@ -198,12 +198,33 @@ def confirm(store: Path, rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]
     ]
 
 
-def _git(store: Path, *args: str) -> subprocess.CompletedProcess[str]:
+#: Дедлайн локальной команды git: add, diff, commit, log. Они не ходят наружу,
+#: и десять секунд им с запасом.
+LOCAL_TIMEOUT = 10
+
+#: Дедлайн команды, которая ходит в сеть: push и pull. Больше локального,
+#: потому что предмет другой — чужой сервер, а не свой диск.
+NETWORK_TIMEOUT = 120
+
+
+def _git(
+    store: Path, *args: str, timeout: float = LOCAL_TIMEOUT
+) -> subprocess.CompletedProcess[str]:
+    """Одна команда git в хранилище.
+
+    ``GIT_TERMINAL_PROMPT=0`` лечит причину, а не симптом: без него git при
+    истёкшем ключе или неверном адресе **ждёт ввода с терминала**, которого в
+    прогоне нет, — и висит до дедлайна. С ним он отказывает сразу и внятно, а
+    дедлайн остаётся вторым слоем, на случай зависания уже внутри обмена (#95).
+    """
+    окружение = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     return subprocess.run(
         ["git", "-C", str(store), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=окружение,
+        timeout=timeout,
     )
 
 
@@ -228,12 +249,12 @@ def push(store: Path, *, attempts: int = 3) -> PushResult:
     """
     последняя = ""
     for попытка in range(1, attempts + 1):
-        ответ = _git(store, "push")
+        ответ = _git(store, "push", timeout=NETWORK_TIMEOUT)
         if not ответ.returncode:
             return PushResult(True, f"уехал с попытки {попытка}")
         последняя = (ответ.stderr or ответ.stdout).strip()
         if попытка < attempts:
-            _git(store, "pull", "--rebase")
+            _git(store, "pull", "--rebase", timeout=NETWORK_TIMEOUT)
     return PushResult(
         False,
         f"пуш не прошёл за {attempts} попытки: {последняя}. Замер записан и "
