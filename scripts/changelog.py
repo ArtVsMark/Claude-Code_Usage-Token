@@ -47,6 +47,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Каталог фрагментов. Пустой — законное состояние: «менять нечего».
@@ -249,6 +251,8 @@ def requires_entry(labels: Sequence[str]) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    force_utf8_output()
+
     парсер = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     парсер.add_argument(
         "--strict",

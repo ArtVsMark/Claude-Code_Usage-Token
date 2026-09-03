@@ -35,6 +35,7 @@ import check_pr_metadata
 import repo_links
 import shell_ascii
 import subprocess_encoding
+import utf8_output
 import version
 from utf8_output import force_utf8_output
 
@@ -642,6 +643,8 @@ def report(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Прогнать всё и вернуть ненулевой код, если хоть что-то не прошло."""
+    force_utf8_output()
+
     if argv:
         print(
             f"preflight не принимает аргументов, получено: {list(argv)}",
@@ -688,6 +691,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    потоки = utf8_output.check_tree(ROOT, files=файлы)
+    имя_потоков = f"UTF-8 на потоках скриптов (проверено {потоки.examined})"
+    if потоки.находки:
+        failed.append((имя_потоков, "\n".join(str(н) for н in потоки.находки)))
+    else:
+        passed.append(имя_потоков)
 
     кодировки = subprocess_encoding.check_tree(ROOT, files=файлы)
     имя_кодировок = f"кодировка подпроцессов названа (исходников {кодировки.examined})"
@@ -764,5 +774,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    force_utf8_output()
     raise SystemExit(main(sys.argv[1:]))
