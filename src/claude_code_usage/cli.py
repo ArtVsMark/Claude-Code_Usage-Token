@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from . import registry, storage, transcripts, whitelist
+from .output import force_utf8_output
 
 #: Команды из ``docs/spec.md``, § «Что инструмент делает».
 COMMANDS: tuple[str, ...] = ("sample", "report", "calibrate")
@@ -289,6 +290,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Разобрать аргументы и выполнить команду либо отказать, назвав причину."""
+    force_utf8_output()
+
     args = list(sys.argv[1:] if argv is None else argv)
 
     if not args:

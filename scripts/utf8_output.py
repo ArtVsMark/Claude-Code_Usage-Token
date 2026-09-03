@@ -44,15 +44,23 @@ UTF-8 первым делом» нечем соблюдать вниманием
 который эта команда выдаёт до всякой работы, уходил в кодировку локали. Нашёл
 это гейт на собственном дереве, до того как был дописан.
 
-## Граница: пакет сюда не входит
+## Предмет: скрипты и точки входа пакета
 
-`src/claude_code_usage/cli.py` печатает по-русски и страдает тем же, но
-импортировать `scripts/` он не может — его ставят у чужого человека, где
-никаких `scripts/` нет. Обратное тоже неверно: четыре workflow запускают
-скрипты **без установки пакета** (`changelog`, `merge-queue`, `pr-check`,
-`pr-metadata`), поэтому и `scripts/` не может зависеть от него. Значит там
-нужна своя копия функции и своё решение — отдельной задачей, а не расширением
-охвата этого гейта.
+Два рода запускаемого, и признаки у них разные. Скрипт объявляет себя блоком
+`if __name__ == "__main__"`. Точка входа пакета — строкой в `[project.scripts]`
+файла `pyproject.toml`, и никакого блока у неё нет: её зовёт обёртка, которую
+делает установщик. Искать один признак у обоих значило бы пропустить второй —
+а именно у него вывод читает чужой человек, а не прогон.
+
+## Почему функция живёт в двух местах, а не в одном
+
+Свести копии нельзя ни в одну сторону: пакет не может импортировать `scripts/`
+(его ставят там, где никаких `scripts/` нет), а `scripts/` не может зависеть от
+пакета — четыре workflow (`changelog`, `merge-queue`, `pr-check`,
+`pr-metadata`) запускают скрипты **без установки**. Общего дома у неё нет, и
+попытка его завести сломает либо установку, либо четыре прогона.
+
+Разойтись копиям не даёт этот гейт: имя у функции одно, и ищется оно по имени.
 """
 
 from __future__ import annotations
@@ -60,6 +68,7 @@ from __future__ import annotations
 import ast
 import re
 import sys
+import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -160,10 +169,15 @@ def _найти_вызов(
     return None
 
 
-def check_text(text: str, path: str) -> list[Находка]:
-    """Проверить один исходник. Пустой список — либо чисто, либо не предмет."""
+def check_text(text: str, path: str, *, запускается: bool = False) -> list[Находка]:
+    """Проверить один исходник. Пустой список — либо чисто, либо не предмет.
+
+    `запускается` говорит, что модуль запускают снаружи, даже если блока
+    `__main__` в нём нет: так устроена точка входа пакета — обёртку делает
+    установщик, а признака в самом файле не остаётся.
+    """
     дерево = ast.parse(text, filename=path)
-    if not _есть_запуск(дерево) or not _NON_ASCII.search(text):
+    if not (запускается or _есть_запуск(дерево)) or not _NON_ASCII.search(text):
         return []
 
     main = next(
@@ -228,6 +242,34 @@ def check_text(text: str, path: str) -> list[Находка]:
     ]
 
 
+def entry_points(root: Path) -> list[Path]:
+    """Модули, объявленные точками входа в `[project.scripts]`.
+
+    Объявление вида `имя = "пакет.модуль:функция"`; берётся часть до двоеточия
+    и ищется на диске — сперва под `src/`, потом от корня, чтобы раскладка
+    пакета не была вшита сюда вторым местом.
+
+    Объявленный, но не найденный модуль пропускается: несуществующая точка
+    входа — отдельная беда, и ловит её проверка упаковки, а не эта.
+    """
+    try:
+        данные = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return []
+
+    проект = данные.get("project")
+    объявления = проект.get("scripts", {}) if isinstance(проект, dict) else {}
+    пути: list[Path] = []
+    for цель in объявления.values():
+        модуль = str(цель).split(":", 1)[0]
+        относительный = Path(*модуль.split(".")).with_suffix(".py")
+        for кандидат in (root / "src" / относительный, root / относительный):
+            if кандидат.is_file():
+                пути.append(кандидат)
+                break
+    return пути
+
+
 def script_files(root: Path, *, files: Sequence[Path] | None = None) -> list[Path]:
     """Исходники `scripts/`. Охват назван отдельной функцией, а не спрятан."""
     каталог = root / "scripts"
@@ -243,12 +285,28 @@ def check_tree(root: Path, *, files: Sequence[Path] | None = None) -> Резул
     вызывающего бывает законно пустым (подделочное дерево в тестах), и судить
     о нём гейт не вправе.
     """
-    исходники = script_files(root, files=files)
+    объявленные = {путь.resolve() for путь in entry_points(root)}
+    исходники = list(script_files(root, files=files))
+    уже = {путь.resolve() for путь in исходники}
+    if files is None:
+        исходники += [путь for путь in entry_points(root) if путь.resolve() not in уже]
+    else:
+        # Перечисление чужое: точки входа здесь ОТБИРАЮТСЯ из него, а не
+        # добавляются к нему. Дополнить чужой список значило бы проверить то,
+        # чего вызывающий не передавал, — и «пусто» перестало бы значить пусто.
+        исходники += [
+            путь
+            for путь in files
+            if путь.resolve() in объявленные and путь.resolve() not in уже
+        ]
+
     if not исходники and files is None:
         return Результат(
             [
                 Находка(
-                    str(root / "scripts"), 0, "скриптов не найдено — гейт без предмета"
+                    str(root / "scripts"),
+                    0,
+                    "ни скриптов, ни точек входа не найдено — гейт без предмета",
                 )
             ],
             examined=0,
@@ -265,11 +323,16 @@ def check_tree(root: Path, *, files: Sequence[Path] | None = None) -> Резул
         except (OSError, UnicodeDecodeError, SyntaxError):
             не_предмет += 1
             continue
-        if not _есть_запуск(дерево) or not _NON_ASCII.search(текст):
+        запускается = путь.resolve() in объявленные
+        if not (запускается or _есть_запуск(дерево)) or not _NON_ASCII.search(текст):
             не_предмет += 1
             continue
         проверено += 1
-        находки.extend(check_text(текст, путь.relative_to(root).as_posix()))
+        находки.extend(
+            check_text(
+                текст, путь.relative_to(root).as_posix(), запускается=запускается
+            )
+        )
     return Результат(находки, examined=проверено, skipped=не_предмет)
 
 
