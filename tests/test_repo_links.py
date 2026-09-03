@@ -134,6 +134,7 @@ def test_гейт_отдаёт_ненулевой_код() -> None:
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         env={
             "GITHUB_REPOSITORY": "ArtVsMark/Ne-Sushchestvuyet",
             "PATH": "/usr/bin:/bin",

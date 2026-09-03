@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_pr_metadata
 import repo_links
 import shell_ascii
+import subprocess_encoding
 import version
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -656,6 +657,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_shell, "\n".join(str(н) for н in имена_shell)))
     else:
         passed.append(имя_shell)
+
+    кодировки = subprocess_encoding.check_tree(ROOT, files=файлы)
+    имя_кодировок = f"кодировка подпроцессов названа (исходников {кодировки.examined})"
+    if кодировки.находки:
+        failed.append((имя_кодировок, "\n".join(str(н) for н in кодировки.находки)))
+    else:
+        passed.append(имя_кодировок)
 
     сведения = version.counted(ROOT)
     if сведения is None:
