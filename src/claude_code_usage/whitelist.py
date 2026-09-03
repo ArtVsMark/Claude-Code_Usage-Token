@@ -76,10 +76,29 @@ SOURCES: frozenset[str] = frozenset({"registry", "transcript"})
 #: писать нулём — соврать молча. Поэтому у транскриптных строк поля просто нет.
 REGISTRY_ONLY: frozenset[str] = frozenset({"cost_usd"})
 
+#: Полнота ВЫГРУЗКИ, а не строки: видели ли мы все записи реестра в этот замер
+#: и сколько их было. Поля только у реестровых строк — у транскриптных полнота
+#: другая по природе (файлы читаются целиком, но видны лишь окна своей машины),
+#: и одно поле на две разные величины было бы хуже отсутствия.
+#:
+#: Заведены ДО первой записанной строки, и это не запас: реестр страничный,
+#: `has_more` говорит, что записи кончились не все, и сумма по такой выгрузке
+#: занижена на неизвестную долю. Шкала строится по СУММЕ в момент переключения
+#: светофора — калибровочная точка на неполной сумме неверна, а отличить её в
+#: файле будет нечем: единственный источник тот же усечённый замер (#72).
+SNAPSHOT_FIELDS: frozenset[str] = frozenset({"complete", "sessions"})
+
 #: Всё, что вообще бывает в строке замера. Ни токенов, ни ключей, ни имён, ни
 #: путей — по построению, а не по недосмотру.
 SAMPLE_FIELDS: frozenset[str] = frozenset(
-    {"ts", "session", "source", *USAGE_FIELDS.values(), *LIMIT_FIELDS.values()}
+    {
+        "ts",
+        "session",
+        "source",
+        *USAGE_FIELDS.values(),
+        *LIMIT_FIELDS.values(),
+        *SNAPSHOT_FIELDS,
+    }
 )
 
 
@@ -103,13 +122,24 @@ class UnknownUsageFieldError(ValueError):
 
 
 def build_sample(
-    session: dict[str, Any], *, ts: str, session_id: str
+    session: dict[str, Any],
+    *,
+    ts: str,
+    session_id: str,
+    complete: bool,
+    sessions: int,
 ) -> dict[str, Any]:
     """Собрать строку замера из записи реестра по белому списку.
 
     Незнакомое поле вне ``usage`` отбрасывается молча — оно и не должно было
     попасть. Незнакомое поле внутри ``usage`` поднимает
     :class:`UnknownUsageFieldError`: замер не пишется.
+
+    ``complete`` и ``sessions`` — про ВЫГРУЗКУ, из которой взята эта запись:
+    видели ли мы все записи реестра и сколько их было. Аргументы обязательные и
+    без умолчания намеренно: умолчание «выгрузка полная» соврало бы молча, а
+    молчаливая ложь в append-only хранилище не чинится — строки не
+    редактируются.
     """
     usage = session.get("usage")
     limit = session.get("rate_limit_info")
@@ -131,7 +161,13 @@ def build_sample(
             "append-only"
         )
 
-    замер: dict[str, Any] = {"ts": ts, "session": session_id, "source": "registry"}
+    замер: dict[str, Any] = {
+        "ts": ts,
+        "session": session_id,
+        "source": "registry",
+        "complete": bool(complete),
+        "sessions": int(sessions),
+    }
     for исходное, наше in LIMIT_FIELDS.items():
         замер[наше] = limit.get(исходное)
     for исходное, наше in USAGE_FIELDS.items():
