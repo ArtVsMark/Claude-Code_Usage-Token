@@ -76,8 +76,18 @@ def _minutes_between(early: str, late: str) -> float | None:
 def rows_from_registry(payload: Any, *, ts: str) -> tuple[list[dict[str, Any]], str]:
     """Замеры из выгрузки реестра плюс строка про охват."""
     чтение = registry.records(payload)
+    # Сколько записей БЫЛО в выгрузке, а не сколько дало расход: мостовые окна
+    # без блока usage тоже существуют, и разница между этим числом и числом
+    # строк в файле — их количество.
+    всего = len(чтение.records) + чтение.skipped
     строки = [
-        whitelist.build_sample(запись.payload, ts=ts, session_id=запись.session)
+        whitelist.build_sample(
+            запись.payload,
+            ts=ts,
+            session_id=запись.session,
+            complete=not чтение.truncated,
+            sessions=всего,
+        )
         for запись in чтение.records
     ]
     охват = f"реестр: сессий с расходом {len(строки)}, без расхода {чтение.skipped}"

@@ -257,7 +257,9 @@ def test_замер_реестра_тоже_помечен_источником(
         },
     }
 
-    замер = whitelist.build_sample(запись, ts="t", session_id="s")
+    замер = whitelist.build_sample(
+        запись, ts="t", session_id="s", complete=True, sessions=1
+    )
 
     assert замер["source"] == "registry"
     assert замер["source"] in whitelist.SOURCES

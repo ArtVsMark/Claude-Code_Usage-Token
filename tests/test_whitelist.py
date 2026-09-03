@@ -42,9 +42,22 @@ def _сессия(**правки: Any) -> dict[str, Any]:
     return запись
 
 
-def _замер(**правки: Any) -> dict[str, Any]:
+def _замер(
+    *, complete: bool = True, sessions: int = 1, **правки: Any
+) -> dict[str, Any]:
+    """Строка замера. Полнота выгрузки называется явно — умолчания у неё нет.
+
+    В подделке умолчание допустимо: тесты, где полнота не предмет, не должны
+    повторять её при каждом вызове. У самого `build_sample` умолчания нет
+    намеренно — «выгрузка полная» соврало бы молча, а в append-only хранилище
+    такая ложь не чинится.
+    """
     return whitelist.build_sample(
-        _сессия(**правки), ts="2026-08-31T09:00:00Z", session_id="s1"
+        _сессия(**правки),
+        ts="2026-08-31T09:00:00Z",
+        session_id="s1",
+        complete=complete,
+        sessions=sessions,
     )
 
 
@@ -119,7 +132,9 @@ def test_незнакомое_поле_в_usage_роняет_замер() -> Non
     сессия["usage"]["reasoning_tokens"] = 4200
 
     with pytest.raises(whitelist.UnknownUsageFieldError) as отказ:
-        whitelist.build_sample(сессия, ts="t", session_id="s")
+        whitelist.build_sample(
+            сессия, ts="t", session_id="s", complete=True, sessions=1
+        )
 
     assert отказ.value.fields == ["reasoning_tokens"]
     assert "reasoning_tokens" in str(отказ.value)
@@ -132,7 +147,9 @@ def test_отказ_называет_все_незнакомые_поля() -> N
     сессия["usage"]["tool_tokens"] = 2
 
     with pytest.raises(whitelist.UnknownUsageFieldError) as отказ:
-        whitelist.build_sample(сессия, ts="t", session_id="s")
+        whitelist.build_sample(
+            сессия, ts="t", session_id="s", complete=True, sessions=1
+        )
 
     assert отказ.value.fields == ["reasoning_tokens", "tool_tokens"]
 
@@ -143,7 +160,9 @@ def test_отказ_отдельного_типа() -> None:
     сессия["usage"]["новое"] = 1
 
     with pytest.raises(whitelist.UnknownUsageFieldError):
-        whitelist.build_sample(сессия, ts="t", session_id="s")
+        whitelist.build_sample(
+            сессия, ts="t", session_id="s", complete=True, sessions=1
+        )
 
     assert issubclass(whitelist.UnknownUsageFieldError, ValueError)
 
@@ -157,22 +176,32 @@ def test_неполный_usage_роняет_замер() -> None:
     del сессия["usage"]["cache_write_tokens"]
 
     with pytest.raises(ValueError, match="cache_write_tokens"):
-        whitelist.build_sample(сессия, ts="t", session_id="s")
+        whitelist.build_sample(
+            сессия, ts="t", session_id="s", complete=True, sessions=1
+        )
 
 
 def test_записи_без_usage_роняют_замер() -> None:
     """Тихая пустая строка отравила бы шкалу и нашлась бы через недели."""
     with pytest.raises(ValueError, match="замерять нечего"):
-        whitelist.build_sample({"rate_limit_info": {}}, ts="t", session_id="s")
+        whitelist.build_sample(
+            {"rate_limit_info": {}}, ts="t", session_id="s", complete=True, sessions=1
+        )
 
     with pytest.raises(ValueError, match="замерять нечего"):
-        whitelist.build_sample({"usage": {}}, ts="t", session_id="s")
+        whitelist.build_sample(
+            {"usage": {}}, ts="t", session_id="s", complete=True, sessions=1
+        )
 
 
 def test_мусор_вместо_блоков_роняет_замер() -> None:
     with pytest.raises(ValueError, match="замерять нечего"):
         whitelist.build_sample(
-            {"usage": "не объект", "rate_limit_info": {}}, ts="t", session_id="s"
+            {"usage": "не объект", "rate_limit_info": {}},
+            ts="t",
+            session_id="s",
+            complete=True,
+            sessions=1,
         )
 
 
@@ -192,3 +221,57 @@ def test_аудит_находит_лишнее_в_старой_строке() -
 def test_состав_замера_объявлен_целиком() -> None:
     """`SAMPLE_FIELDS` не должен разойтись с тем, что собирает `build_sample`."""
     assert set(_замер()) == set(whitelist.SAMPLE_FIELDS)
+
+
+# ── полнота выгрузки (#72) ────────────────────────────────────────────────
+#
+# Реестр страничный: `has_more` говорит, что записи кончились не все, и сумма
+# по такой выгрузке занижена на неизвестную долю. Предупреждение об этом жило
+# только в выводе команды, а в append-only хранилище ложились строки, по
+# которым уже не узнать, видели ли мы в тот момент все сессии.
+
+
+def test_неполная_выгрузка_отличима_от_полной() -> None:
+    """Главное требование задачи, проверенное на самой строке."""
+    полная = _замер(complete=True, sessions=5)
+    неполная = _замер(complete=False, sessions=5)
+
+    assert полная["complete"] is True
+    assert неполная["complete"] is False
+
+
+def test_число_записей_выгрузки_попадает_в_строку() -> None:
+    """Сколько записей было видно — часть замера, а не отладка.
+
+    Строк с расходом в файле столько, сколько их записалось; разница с этим
+    числом и есть количество окон без блока расхода (мостовых).
+    """
+    assert _замер(sessions=7)["sessions"] == 7
+
+
+def test_полнота_обязательна_при_сборке() -> None:
+    """Умолчание «выгрузка полная» соврало бы молча.
+
+    В append-only хранилище такая ложь не чинится: строки не редактируются, и
+    в накопленных данных навсегда осталась бы граница, до которой полнота
+    неизвестна.
+    """
+    with pytest.raises(TypeError):
+        whitelist.build_sample(  # type: ignore[call-arg]
+            _сессия(), ts="t", session_id="s"
+        )
+
+
+def test_у_транскриптной_строки_полноты_нет() -> None:
+    """Полнота транскрипта — другая величина, и одно поле на две было бы хуже.
+
+    Файлы читаются целиком, но видны только окна своей машины: «полно» здесь
+    означает не то же самое, что у реестра.
+    """
+    замер = whitelist.build_transcript_sample(
+        {"input": 1, "output": 2, "cache_read": 3, "cache_write": 4},
+        ts="t",
+        session_id="s",
+    )
+
+    assert not (whitelist.SNAPSHOT_FIELDS & set(замер))
