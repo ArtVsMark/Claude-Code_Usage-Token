@@ -84,8 +84,11 @@ which open with an English note.
 
 **The project's rules come from a shared catalogue.** The body of rules worked
 to here lives in
-[Engineering-Incidents-Playbook](https://github.com/ArtVsMark/Engineering-Incidents-Playbook): 162
-entries, each with its incident and its limits. This project's answer — for
+[Engineering-Incidents-Playbook](https://github.com/ArtVsMark/Engineering-Incidents-Playbook),
+where every entry carries its incident and its limits. How many there are is
+said by the catalogue itself, not by this line: a number copied here freezes
+silently (this one said "162" while fourteen more rules arrived). This
+project's answer — for
 every rule, not just the ones somebody got to — is in
 [`.rules/bindings.json`](.rules/bindings.json): accepted and what holds it ·
 rejected and why · no subject here · not yet reviewed. Rules born here are
