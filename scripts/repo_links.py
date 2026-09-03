@@ -61,6 +61,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from utf8_output import force_utf8_output
+
 EXIT_FAILED = 1
 EXIT_BROKEN = 2
 
@@ -135,6 +137,7 @@ def tracked_files(root: Path) -> list[Path]:
         ["git", "-C", str(root), "ls-files", "-z"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=True,
     )
     return [root / имя for имя in ответ.stdout.split("\0") if имя]
@@ -185,6 +188,8 @@ def check_tree(
 
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
+
+    force_utf8_output()
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", default=".", help="корень дерева")
