@@ -91,7 +91,8 @@ def store_path(explicit: str | None = None) -> Path:
     if not сырой:
         raise StoreError(
             f"путь к хранилищу не задан: укажите --store или переменную "
-            f"{ENV_STORE}. Подготовка хранилища описана в docs/storage-setup.md"
+            f"{ENV_STORE}. Подготовка хранилища описана в "
+            "https://github.com/ArtVsMark/Claude-Code_Usage-Token/blob/main/docs/storage-setup.md"
         )
     return Path(сырой).expanduser()
 
