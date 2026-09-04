@@ -2,10 +2,10 @@
   "schema": "1.0",
   "schema_of": "facts",
   "repo": "ArtVsMark/Claude-Code_Usage-Token",
-  "generated_at": "2026-09-04T14:01:40+00:00",
+  "generated_at": "2026-09-04T14:10:41+00:00",
   "tests": {
-    "functions": 463,
-    "modules": 26
+    "functions": 469,
+    "modules": 27
   },
   "python": {
     "supported": [
