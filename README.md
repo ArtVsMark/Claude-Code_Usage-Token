@@ -1,6 +1,6 @@
 # Claude-Code_Usage-Token
 
-[![Версия](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fmain%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
+[![Версия](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fbadges%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
 
 **Сколько на самом деле осталось от лимитов Claude Code — в цифрах, а не в светофоре.**
 
