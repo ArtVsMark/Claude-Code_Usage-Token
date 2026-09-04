@@ -1,0 +1,48 @@
+{
+  "schema": "1.0",
+  "schema_of": "facts",
+  "repo": "ArtVsMark/Claude-Code_Usage-Token",
+  "generated_at": "2026-09-04T14:01:40+00:00",
+  "tests": {
+    "functions": 463,
+    "modules": 26
+  },
+  "python": {
+    "supported": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "os": [
+      "ubuntu-latest",
+      "macos-latest",
+      "windows-latest"
+    ]
+  },
+  "checks_per_pr": {
+    "count": 12,
+    "names": [
+      "PR check",
+      "гейты · macos-latest · python 3.11",
+      "гейты · macos-latest · python 3.12",
+      "гейты · macos-latest · python 3.13",
+      "гейты · ubuntu-latest · python 3.11",
+      "гейты · ubuntu-latest · python 3.12",
+      "гейты · ubuntu-latest · python 3.13",
+      "гейты · windows-latest · python 3.11",
+      "гейты · windows-latest · python 3.12",
+      "гейты · windows-latest · python 3.13",
+      "запись есть и она на языке проекта",
+      "зона, тип, связь с задачей и имя ветки"
+    ]
+  },
+  "rules": {
+    "total": 175,
+    "not_applicable": 24,
+    "rejected": 5,
+    "gate": 84,
+    "document": 36,
+    "none": 20,
+    "pipeline": 6
+  }
+}
