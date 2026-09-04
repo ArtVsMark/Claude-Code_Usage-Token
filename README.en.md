@@ -18,10 +18,22 @@
 > is not measured here, and a number filled in by hand would freeze on the very
 > next change.
 >
+> **No badge does not mean no number.** Facts about how the project is built —
+> how many tests and test modules, which Python versions and platforms the
+> checks run on, how many checks a change creates, what holds each catalogue
+> rule — the project publishes about itself, machine-readable:
+> `.github/badges/facts.json` on the `badges` branch, built by
+> `scripts/facts.py`. That is an answer to a neighbouring showcase, not a
+> picture for a reader, and the questions differ. A section that cannot be
+> counted **exactly** does not go into the file at all: a missing key means «not
+> measured», whereas a zero in its place would read as a measured answer.
+>
 > The gap is named because a missing badge and a frozen badge look
 > **identical** from the outside. This is held by the `scripts/preflight.py`
 > gate: a question without an answer, and a badge that has drifted from the
-> tree, are refusals rather than warnings.
+> tree, are refusals rather than warnings. The same gate keeps a facts section
+> from disappearing silently: if its source is in the tree and no number comes
+> out of it, that is a refusal.
 
 ## The problem
 
