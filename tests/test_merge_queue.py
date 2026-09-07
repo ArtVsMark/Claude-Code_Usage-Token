@@ -615,7 +615,7 @@ def test_тело_squash_собирается_из_одного_коммита(
             {"commit": {"message": "заголовок\n\nтело\n\nCo-authored-by: X <a@b>"}}
         ],
     )
-    assert merge_queue.squash_message("o/r", 1) == "тело"
+    assert merge_queue.squash_message("o/r", 1) == f"тело\n\n{merge_queue.ПОДПИСЬ}"
 
 
 def test_тело_squash_из_нескольких_коммитов_списком(
@@ -634,7 +634,9 @@ def test_тело_squash_из_нескольких_коммитов_списко
     assert вышло is not None
     assert вышло.startswith("* первый")
     assert "* второй" in вышло
-    assert "Co-Authored-By" not in вышло
+    assert "Co-Authored-By" not in вышло, "подпись окна снята"
+    assert вышло.endswith(merge_queue.ПОДПИСЬ), "а своя дописана"
+    assert вышло.lower().count("co-authored-by") == 1
 
 
 def test_коммиты_не_прочитаны_тело_соберёт_площадка(
@@ -689,3 +691,30 @@ def test_в_стопке_разбирает_базу() -> None:
         "мусор",
     ]
     assert merge_queue.в_стопке(открытые, "main") == [(2, "agent/ветка-1")]
+
+
+def test_подпись_дописывается_очередью(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Обязательная половина правки, и её отсутствие стоило трёх коммитов.
+
+    Площадка дописывает трейлер, ТОЛЬКО когда собирает тело сама. Получив
+    готовое `commit_message`, она не добавляет ничего — и коммит уезжает без
+    подписи вовсе, что хуже двоения, ради устранения которого правка делалась.
+    """
+    monkeypatch.setattr(
+        gh_rest,
+        "paged",
+        lambda путь, **_: [{"commit": {"message": "заголовок\n\nтело"}}],
+    )
+    вышло = merge_queue.squash_message("o/r", 1)
+    assert вышло is not None
+    assert вышло.endswith(merge_queue.ПОДПИСЬ)
+
+
+def test_подпись_есть_даже_у_пустого_тела(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Коммит из одного заголовка — тело пустое, а подпись всё равно нужна."""
+    monkeypatch.setattr(
+        gh_rest,
+        "paged",
+        lambda путь, **_: [{"commit": {"message": "только заголовок"}}],
+    )
+    assert merge_queue.squash_message("o/r", 1) == merge_queue.ПОДПИСЬ
