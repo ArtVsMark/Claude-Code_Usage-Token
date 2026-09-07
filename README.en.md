@@ -1,6 +1,7 @@
 # Claude-Code_Usage-Token
 
 [![Version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fbadges%2F.github%2Fbadges%2Fversion.json&cacheSeconds=300)](pyproject.toml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FArtVsMark%2FClaude-Code_Usage-Token%2Fbadges%2F.github%2Fbadges%2Fcoverage.json&cacheSeconds=300)](pyproject.toml)
 
 **How much of your Claude Code limits is actually left — as a number, not a traffic light.**
 
@@ -8,15 +9,17 @@
 
 > **What the showcase does not answer, and why.** The question set is one and
 > the same across projects ([`.rules/showcase.json`](.rules/showcase.json)), and
-> a gap in it is named rather than omitted: of the ten questions **one** is
-> answered by a live number, the other nine are named with a reason. There is no
+> a gap in it is named rather than omitted: of the ten questions **two** are
+> answered by a live number, the other eight are named with a reason. There is no
 > **CI** badge — the platform reports run state itself, and a second source of
 > the same thing drifts from the first silently. There is no **release**
 > badge — the platform lists releases itself, on the Releases tab. There is no
 > **PyPI** badge — nothing is published there before `1.0`, and that is the
-> owner's decision rather than a gap. There is no **coverage** badge — coverage
-> is not measured here, and a number filled in by hand would freeze on the very
-> next change.
+> owner's decision rather than a gap. **Coverage** is answered by a live
+> number: the badge workflow measures it on one named cell, and both halves of
+> the tree are counted — the tool itself and the pipeline gates. Filled in by
+> hand it would freeze on the very next change, and a frozen badge is
+> indistinguishable from an honest one.
 >
 > **No badge does not mean no number.** Facts about how the project is built —
 > how many tests and test modules, which Python versions and platforms the
