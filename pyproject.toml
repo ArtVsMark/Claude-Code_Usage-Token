@@ -95,8 +95,12 @@ docstring-code-format = true
 # ── mypy ──────────────────────────────────────────────────────────────────
 [tool.mypy]
 python_version = "3.11"
-mypy_path = "src"
-files = ["src", "tests", "scripts"]
+# Хук живёт в .claude/hooks, потому что там его ищет Claude Code, а не мы: он
+# объявлен в .claude/settings.json и вызывается им. Каталог поэтому назван и
+# здесь — иначе проверка типов и набор тестов его не видели бы, и заслон был бы
+# единственным кодом проекта без них.
+mypy_path = "src:.claude/hooks"
+files = ["src", "tests", "scripts", ".claude/hooks"]
 strict = true
 # Строгость без этих трёх — строгость на словах: они и ловят молчаливое «Any».
 warn_unreachable = true
@@ -109,7 +113,7 @@ pretty = true
 testpaths = ["tests"]
 # src-раскладка без установки пакета: гейт обязан работать в свежем клоне,
 # иначе «тесты зелёные» будет означать «пакет не найден».
-pythonpath = ["src", "scripts"]
+pythonpath = ["src", "scripts", ".claude/hooks"]
 addopts = "-q --strict-markers --strict-config"
 xfail_strict = true
 

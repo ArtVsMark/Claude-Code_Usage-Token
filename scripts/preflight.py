@@ -35,11 +35,13 @@ import attribution
 import check_pr_metadata
 import check_schedules
 import concurrency_head
+import doc_limits
 import exclusive_claims
 import facts
 import repo_links
 import rules_answer
 import shell_ascii
+import shell_heredoc
 import subprocess_encoding
 import subprocess_timeout
 import utf8_output
@@ -833,6 +835,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_контракта, "\n".join(контракт.findings)))
     else:
         passed.append(имя_контракта)
+
+    # МЕЖДУ ОКНОМ И ФАЙЛОМ СТОИТ ОБОЛОЧКА, и heredoc с незакавыченным
+    # разделителем она интерпретирует: записанное расходится с написанным
+    # молча, а прогон при этом зелёный.
+    heredoc = shell_heredoc.проверить(ROOT)
+    имя_heredoc = (
+        f"heredoc закавычен (прогонов {heredoc.прогонов}, "
+        f"heredoc'ов {heredoc.heredoc_ов})"
+    )
+    if heredoc.находки:
+        failed.append((имя_heredoc, "\n".join(str(н) for н in heredoc.находки)))
+    else:
+        passed.append(имя_heredoc)
+
+    # У РАСТУЩЕЙ ЧАСТИ ДОКУМЕНТА ЕСТЬ ПРЕДЕЛ, ВЫРАЖЕННЫЙ ЧИСЛОМ. Свод читают
+    # целиком при старте каждого окна: его длина — цена КАЖДОГО окна, а не
+    # одного. Число печатается до отказа, и его рост и есть сигнал.
+    документы = doc_limits.проверить(ROOT)
+    имя_документов = (
+        f"предел документов ({документы.проверено}; "
+        f"полнее всего {документы.самый_полный})"
+    )
+    if документы.находки:
+        failed.append((имя_документов, "\n".join(документы.находки)))
+    else:
+        passed.append(имя_документов)
 
     # ОДИН УЧАСТНИК — ОДНА ПОДПИСЬ В КОНЕЧНОЙ ИСТОРИИ. Проверяется история
     # общей ветки, а не коммит ветки изменения: строку соавторства площадка при
