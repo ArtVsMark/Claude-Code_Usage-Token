@@ -216,3 +216,43 @@ def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None
 
     assert ответ.returncode == rules_answer.EXIT_FAILED
     assert "правило 001" in ответ.stdout
+
+
+# ── сверка ЧУЖОЙ версии (#85, правило 157) ──────────────────────────────────
+
+
+def test_версия_выгрузки_сошлась(tmp_path: Path) -> None:
+    файл = tmp_path / "rules.json"
+    файл.write_text(
+        json.dumps({"schema": rules_answer.СХЕМА_ВЫГРУЗКИ}), encoding="utf-8"
+    )
+    assert rules_answer.сверить_выгрузку(файл) is None
+
+
+def test_подъём_у_издателя_замечен(tmp_path: Path) -> None:
+    """Ровно то, чего односторонняя сверка не заметит никогда."""
+    файл = tmp_path / "rules.json"
+    файл.write_text(json.dumps({"schema": "9.9"}), encoding="utf-8")
+    расхождение = rules_answer.сверить_выгрузку(файл)
+    assert расхождение is not None
+    assert "'9.9'" in расхождение
+
+
+def test_выгрузки_нет_это_отказ(tmp_path: Path) -> None:
+    """Выгрузку кладёт прогон: её отсутствие значит, что он не отработал."""
+    расхождение = rules_answer.сверить_выгрузку(tmp_path / "нет.json")
+    assert расхождение is not None
+    assert "не прочитана" in расхождение
+
+
+def test_обе_стороны_сверки_ответа_названы_своими(tmp_path: Path) -> None:
+    """Текст отказа больше не утверждает ничего о чужой стороне."""
+    (tmp_path / ".rules").mkdir(parents=True)
+    (tmp_path / rules_answer.ОТВЕТ).write_text(
+        json.dumps({"schema": "0.9", "rules": {}}, ensure_ascii=False), encoding="utf-8"
+    )
+    находки = rules_answer.check_tree(tmp_path).находки
+    про_схему = [н for н in находки if "schema ответа" in н.message]
+    assert len(про_схему) == 1
+    assert "Обе стороны сравнения НАШИ" in про_схему[0].message
+    assert "контракт требует" not in про_схему[0].message

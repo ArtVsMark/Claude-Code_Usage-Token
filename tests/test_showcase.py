@@ -20,6 +20,8 @@ from typing import Any
 
 import pytest
 
+import badges
+import facts
 import preflight
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
@@ -337,7 +339,7 @@ def test_значок_с_отдельной_ветки_не_требует_фа�
     общую. Требовать файл здесь значило бы заворачивать верное.
 
     Вопрос взят с СУЩЕСТВУЮЩИМ правилом вывода. Прежняя редакция брала
-    `coverage`, которого гейт считать не умеет, и была зелёной по обеим
+    `tests`, которого гейт считать не умеет, и была зелёной по обеим
     причинам сразу — а значит не различала их.
     """
     корень = _контракт(
@@ -375,14 +377,14 @@ def test_значок_с_ветки_без_правила_вывода_нахо�
         [
             ПРОБЕЛ,
             {
-                "id": "coverage",
-                "ask": "какая доля кода покрыта тестами",
-                "badge": ".github/badges/coverage.json",
+                "id": "tests",
+                "ask": "сколько тестов в наборе",
+                "badge": ".github/badges/tests.json",
                 "branch": "badges",
             },
         ],
-        _ВИТРИНА_RU + "Значок: coverage.json\n",
-        _ВИТРИНА_EN + "Значок: coverage.json\n",
+        _ВИТРИНА_RU + "Значок: tests.json\n",
+        _ВИТРИНА_EN + "Значок: tests.json\n",
     )
 
     находки = preflight.check_showcase(корень).findings
@@ -506,8 +508,8 @@ def test_значок_без_правила_вывода(tmp_path: Path) -> None
     корень = _со_значком(
         tmp_path,
         вопрос={
-            "id": "coverage",
-            "ask": "какая доля кода покрыта тестами",
+            "id": "tests",
+            "ask": "сколько тестов в наборе",
             "badge": ".github/badges/version.json",
         },
     )
@@ -769,3 +771,82 @@ def test_витрина_проекта_не_отрицает_своих_выпу
     нечем, и та же граница записана в `docs/versioning.md`.
     """
     assert preflight.check_showcase(КОРЕНЬ).findings == []
+
+
+# ── третий исход: правило есть, замера нет (#103) ───────────────────────────
+
+
+def test_замер_покрытия_даёт_значок(tmp_path: Path) -> None:
+    """Число берётся из замера, а не из дерева: считает его прогон значков."""
+    (tmp_path / facts.COVERAGE_MEASUREMENT).write_text(
+        json.dumps({"totals": {"percent_covered": 87.23}}), encoding="utf-8"
+    )
+    значок = preflight.expected_badge("coverage", tmp_path)
+    assert значок == {
+        "schemaVersion": 1,
+        "label": "coverage",
+        "message": "87.2%",
+        "color": preflight.BADGE_COLOR,
+    }
+
+
+def test_замера_нет_это_не_отсутствие_правила(tmp_path: Path) -> None:
+    """Три исхода, а не два (039).
+
+    `None` означает «правила вывода нет» — отказ: объявленный значок сверялся бы
+    с пустотой. «Замера нет» — законное состояние дерева: покрытие меряет прогон
+    значков, и требовать его файл в каждом локальном прогоне значило бы
+    заворачивать верное.
+    """
+    ответ = preflight.expected_badge("coverage", tmp_path)
+    assert isinstance(ответ, preflight.ЗамераНет)
+    assert ответ is not None
+
+
+def test_битый_замер_читается_как_его_отсутствие(tmp_path: Path) -> None:
+    (tmp_path / facts.COVERAGE_MEASUREMENT).write_text("не json", encoding="utf-8")
+    assert isinstance(
+        preflight.expected_badge("coverage", tmp_path), preflight.ЗамераНет
+    )
+
+
+def test_гейт_витрины_на_отсутствии_замера_молчит(tmp_path: Path) -> None:
+    """Молчание здесь честно: правило есть, а число кладёт прогон."""
+    корень = _контракт(
+        tmp_path,
+        [
+            ПРОБЕЛ,
+            {
+                "id": "coverage",
+                "ask": "какая доля кода покрыта тестами",
+                "badge": ".github/badges/coverage.json",
+                "branch": "badges",
+            },
+        ],
+        _ВИТРИНА_RU + "Значок: coverage.json\n",
+        _ВИТРИНА_EN + "Значок: coverage.json\n",
+    )
+    assert preflight.check_showcase(корень).findings == []
+
+
+def test_собрать_значок_без_замера_нельзя(tmp_path: Path) -> None:
+    """Гейт молчит, а СБОРКА падает: писать значок не из чего.
+
+    Разные требования к разным ролям — не поблажка: пустой файл на ветке
+    отвечал бы вместо живого числа, и отличить его было бы нечем.
+    """
+    корень = _контракт(
+        tmp_path,
+        [
+            {
+                "id": "coverage",
+                "ask": "какая доля кода покрыта тестами",
+                "badge": ".github/badges/coverage.json",
+                "branch": "badges",
+            }
+        ],
+        _ВИТРИНА_RU + "Значок: coverage.json\n",
+        _ВИТРИНА_EN + "Значок: coverage.json\n",
+    )
+    with pytest.raises(ValueError, match="замера под ним нет"):
+        badges.build(корень)
