@@ -192,6 +192,20 @@ class ФейковаяПлощадка:
                 }
             )
             return {"workflow_runs": прогоны}
+        if path.endswith("/commits"):
+            # Коммиты изменения: из них очередь собирает тело squash сама,
+            # снимая подпись окна (#94). Подделка отдаёт коммит С подписью —
+            # иначе снятие проверялось бы на пустоте.
+            return [
+                {
+                    "commit": {
+                        "message": (
+                            "правка\n\nтело\n\n"
+                            "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+                        )
+                    }
+                }
+            ]
         if "/compare/" in path:
             self.сравнения.append(path)
             return {"behind_by": self.behind_by, "ahead_by": 1}
@@ -552,3 +566,126 @@ def test_отказ_по_всем_готовым_называется_вслух
     вывод = capsys.readouterr().out
     assert "#1, #2" in вывод, "перечень застрявших обязан быть в выводе"
     assert "новой головой" in вывод
+
+
+# ── подпись при сборке squash (#94, правило 123) ────────────────────────────
+
+
+def test_подпись_окна_снимается() -> None:
+    """Строка окна бесполезна при одном коммите и вредна при нескольких."""
+    тело = (
+        "правка\n\n"
+        "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n"
+        "Claude-Session: https://claude.ai/code/session_x\n"
+    )
+    вышло = merge_queue.без_подписи_окна(тело)
+    assert "Co-Authored-By" not in вышло
+    assert "Claude-Session" in вышло, "версия модели живёт в ссылке и остаётся"
+
+
+def test_снимаются_обе_формы_написания() -> None:
+    """Площадка пишет `Co-authored-by`, окно — `Co-Authored-By`; убираются обе."""
+    тело = (
+        "правка\n\n"
+        "Co-authored-by: Claude <noreply@anthropic.com>\n"
+        "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>\n"
+    )
+    assert "authored" not in merge_queue.без_подписи_окна(тело).lower()
+
+
+def test_проза_не_трогается() -> None:
+    """Убирается ТРЕЙЛЕР — строка целиком, а не упоминание в тексте."""
+    тело = "разбор строки Co-Authored-By в теле коммита остаётся прозой\n"
+    assert "Co-Authored-By" in merge_queue.без_подписи_окна(тело)
+
+
+def test_столбик_пустых_строк_схлопывается() -> None:
+    тело = "правка\n\nCo-authored-by: A <a@b>\n\n\nCo-authored-by: B <c@d>\n"
+    assert "\n\n\n" not in merge_queue.без_подписи_окна(тело)
+
+
+def test_тело_squash_собирается_из_одного_коммита(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Один коммит — его тело, как у площадки: история читается одинаково."""
+    monkeypatch.setattr(
+        gh_rest,
+        "paged",
+        lambda путь, **_: [
+            {"commit": {"message": "заголовок\n\nтело\n\nCo-authored-by: X <a@b>"}}
+        ],
+    )
+    assert merge_queue.squash_message("o/r", 1) == "тело"
+
+
+def test_тело_squash_из_нескольких_коммитов_списком(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Несколько — списком со звёздочкой, тоже как у площадки."""
+    monkeypatch.setattr(
+        gh_rest,
+        "paged",
+        lambda путь, **_: [
+            {"commit": {"message": "первый\n\nCo-Authored-By: Claude Opus 5 <a@b>"}},
+            {"commit": {"message": "второй"}},
+        ],
+    )
+    вышло = merge_queue.squash_message("o/r", 1)
+    assert вышло is not None
+    assert вышло.startswith("* первый")
+    assert "* второй" in вышло
+    assert "Co-Authored-By" not in вышло
+
+
+def test_коммиты_не_прочитаны_тело_соберёт_площадка(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Отказ мержа из-за оформления был бы худшим исходом: очередь встала бы."""
+
+    def падает(путь: str, **_: Any) -> Any:
+        raise gh_rest.GitHubError("GET", путь, 500, "сервер отказал")
+
+    monkeypatch.setattr(gh_rest, "paged", падает)
+    assert merge_queue.squash_message("o/r", 1) is None
+    assert "тело соберёт площадка" in capsys.readouterr().out
+
+
+# ── стопка веток (#98, правило 133) ─────────────────────────────────────────
+
+
+def test_pr_стопки_назван_а_не_пропущен(
+    площадка: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Прежде очередь не видела его вовсе — ни вердикта, ни меток, ни мержа.
+
+    Это возвращало человека ровно туда, откуда его убирали: PR стопки приходилось
+    мержить руками.
+    """
+    площадка(
+        pulls=[_pull(1), _pull(2, base={"ref": "agent/ветка-1", "sha": "base-sha"})]
+    )
+    merge_queue.run("o/r", "main", dry=True)
+    вывод = capsys.readouterr().out
+    assert "в стопке, ждут родителя: #2 (база agent/ветка-1)" in вывод
+
+
+def test_pr_стопки_не_мержится(
+    площадка: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Двигать его очередь не берётся: базу переставит площадка при мерже родителя."""
+    двойник = площадка(
+        pulls=[_pull(2, base={"ref": "agent/ветка-1", "sha": "base-sha"})]
+    )
+    merge_queue.run("o/r", "main", dry=False)
+    assert not [п for м, п in двойник.записи if п.endswith("/merge")]
+    assert "очередь пуста: открытых PR на общей ветке нет" in capsys.readouterr().out
+
+
+def test_в_стопке_разбирает_базу() -> None:
+    открытые = [
+        _pull(1),
+        _pull(2, base={"ref": "agent/ветка-1", "sha": "s"}),
+        {"number": 3},
+        "мусор",
+    ]
+    assert merge_queue.в_стопке(открытые, "main") == [(2, "agent/ветка-1")]

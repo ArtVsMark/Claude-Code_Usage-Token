@@ -60,6 +60,13 @@ def build(root: Path, *, out: Path | None = None) -> list[Path]:
     записано: list[Path] = []
     for qid, относительный in declared(root):
         значение = preflight.expected_badge(qid, root)
+        if isinstance(значение, preflight.ЗамераНет):
+            raise ValueError(
+                f"{qid}: правило вывода есть, а замера под ним нет. Гейт "
+                "витрины на этом молчит законно — замер делает этот прогон, — "
+                "но СОБРАТЬ значок не из чего, и пустой файл на ветке отвечал "
+                "бы вместо живого числа"
+            )
         if значение is None:
             raise ValueError(
                 f"{qid}: значок {относительный} объявлен витриной, а правила "
