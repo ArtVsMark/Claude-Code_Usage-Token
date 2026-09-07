@@ -30,11 +30,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from . import probe as probe_mod
 from . import registry, storage, transcripts, whitelist
 from .output import force_utf8_output
 
 #: Команды из ``docs/spec.md``, § «Что инструмент делает».
-COMMANDS: tuple[str, ...] = ("sample", "report", "calibrate")
+COMMANDS: tuple[str, ...] = ("sample", "probe", "report", "calibrate")
 
 #: Ошибка вызова: команды нет, аргументы не те, хранилище не задано.
 EXIT_USAGE = 2
@@ -265,6 +266,35 @@ def _too_soon(
     )
 
 
+def _probe(аргументы: argparse.Namespace) -> int:
+    """Сравнить две выгрузки реестра и назвать природу `usage` (#101).
+
+    Команда ничего не пишет: она отвечает на вопрос спецификации, а не снимает
+    замер. Ответов три, и «не различить» — полноценный из них, а не неудача:
+    рост между замерами предсказывается ОБОИМИ чтениями, и вывод из него был бы
+    догадкой (правило 178).
+    """
+    выгрузки = []
+    for имя_поля, путь in (
+        ("--before", аргументы.before),
+        ("--after", аргументы.after),
+    ):
+        try:
+            выгрузки.append(json.loads(Path(путь).read_text(encoding="utf-8")))
+        except (OSError, ValueError) as отказ:
+            print(f"{имя_поля}: выгрузка не прочитана — {отказ}", file=sys.stderr)
+            return EXIT_USAGE
+
+    try:
+        вердикт = probe_mod.сравнить(выгрузки[0], выгрузки[1])
+    except ValueError as отказ:
+        print(f"выгрузка не разобрана: {отказ}", file=sys.stderr)
+        return EXIT_USAGE
+
+    print(вердикт)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="claude-code-usage-meter")
     подкоманды = parser.add_subparsers(dest="command")
@@ -303,6 +333,17 @@ def build_parser() -> argparse.ArgumentParser:
     замер.add_argument(
         "--dry-run", action="store_true", help="показать строки, ничего не записывая"
     )
+
+    проба = подкоманды.add_parser(
+        "probe",
+        help="накопительный ли usage реестра: сравнить две выгрузки (#101)",
+    )
+    проба.add_argument(
+        "--before", required=True, metavar="ФАЙЛ", help="выгрузка реестра ДО"
+    )
+    проба.add_argument(
+        "--after", required=True, metavar="ФАЙЛ", help="выгрузка реестра ПОСЛЕ"
+    )
     return parser
 
 
@@ -331,7 +372,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return EXIT_USAGE
 
-    return _sample(build_parser().parse_args(args))
+    аргументы = build_parser().parse_args(args)
+    if имя == "probe":
+        return _probe(аргументы)
+    return _sample(аргументы)
 
 
 if __name__ == "__main__":  # pragma: no cover
