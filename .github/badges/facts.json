@@ -2,7 +2,7 @@
   "schema": "1.0",
   "schema_of": "facts",
   "repo": "ArtVsMark/Claude-Code_Usage-Token",
-  "generated_at": "2026-09-07T13:21:31+00:00",
+  "generated_at": "2026-09-07T13:26:18+00:00",
   "tests": {
     "functions": 527,
     "modules": 31
@@ -41,8 +41,8 @@
     "not_applicable": 24,
     "rejected": 5,
     "gate": 91,
-    "document": 36,
-    "none": 16,
+    "document": 46,
+    "none": 6,
     "pipeline": 9
   },
   "coverage_percent": 87.4
