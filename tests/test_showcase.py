@@ -850,3 +850,40 @@ def test_собрать_значок_без_замера_нельзя(tmp_path: 
     )
     with pytest.raises(ValueError, match="замера под ним нет"):
         badges.build(корень)
+
+
+# ── собранное в дереве меняет смысл ответов (#47) ───────────────────────────
+
+
+def test_собранного_в_чистом_дереве_нет() -> None:
+    """Своё дерево чисто: иначе прогон отвечает не о том состоянии, что уедет."""
+    assert preflight.собранное_в_дереве(КОРЕНЬ) == []
+
+
+def test_остатки_ручного_прогона_называются(tmp_path: Path) -> None:
+    """Замечание, а не отказ: собрать значки локально — законное действие."""
+    (tmp_path / ".github" / "badges").mkdir(parents=True)
+    (tmp_path / "coverage.json").write_text("{}", encoding="utf-8")
+    assert preflight.собранное_в_дереве(tmp_path) == [
+        ".github/badges",
+        "coverage.json",
+    ]
+
+
+def test_замечание_о_собранном_не_меняет_код_возврата(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Иначе это был бы отказ, а проверка руками стала бы нарушением."""
+    _контракт(tmp_path)
+    # Замер ВАЛИДНЫЙ: битый — отдельная болезнь, её ловит гейт фактов отказом,
+    # а здесь предмет в том, что и целый замер меняет смысл ответов.
+    (tmp_path / "coverage.json").write_text(
+        json.dumps({"totals": {"percent_covered": 87.2}}), encoding="utf-8"
+    )
+    monkeypatch.setattr(preflight, "ROOT", tmp_path)
+    monkeypatch.setattr(preflight, "checks", tuple)
+    monkeypatch.setattr(preflight, "tracked_files", list)
+
+    assert preflight.main([]) == 0
+    # Сводка идёт в stderr — туда же, куда и остальные замечания.
+    assert "в дереве лежит собранное" in capsys.readouterr().err
