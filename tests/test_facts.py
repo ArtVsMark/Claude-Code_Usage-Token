@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -23,6 +24,28 @@ import facts
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 РЕПОЗИТОРИЙ = "ArtVsMark/Claude-Code_Usage-Token"
+КОММИТ = "0123456789abcdef0123456789abcdef01234567"
+
+#: Настоящий `выпуск`, снятый до подмены: его проверяют отдельно, на настоящем git.
+_ВЫПУСК = facts.выпуск
+
+
+@pytest.fixture(autouse=True)
+def _история_не_нужна(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Сборка целиком не должна зависеть от глубины клона, в котором идёт набор.
+
+    `ci.yml` клонирует мелко, облачное окно тоже: настоящий `выпуск` там честно
+    отказывает. Он проверяется своими тестами ниже, на собранном репозитории;
+    остальным нужен только ответ — «выпусков нет».
+    """
+    monkeypatch.setattr(facts, "выпуск", lambda root: None)
+    monkeypatch.setenv("GITHUB_SHA", КОММИТ)
+
+
+def _git(где: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(где), *args], check=True, capture_output=True, timeout=30
+    )
 
 
 def _прогон(*, matrix: str = "", name: str = "гейты") -> str:
@@ -148,12 +171,47 @@ def test_испорченные_ответы_каталогу_не_дают_ра
 
 
 def test_обязательный_минимум_на_месте() -> None:
-    """Без этих трёх полей файл бесполезен: не прочесть, не понять о ком и когда."""
+    """Минимум договора 1.2: без него витрина файл не примет вовсе."""
     ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
-    assert ф["schema"] == "1.0"
+    assert ф["schema"] == "1.2"
     assert isinstance(ф["schema"], str), "версия строкой: 1.0 и 1.10 иначе не различить"
     assert ф["repo"] == РЕПОЗИТОРИЙ
     assert datetime.fromisoformat(ф["generated_at"]).tzinfo is not None
+    assert ф["commit"] == КОММИТ
+    assert ф["ci"] == {"workflow": "ci.yml"}
+
+
+def test_прогон_ci_существует() -> None:
+    """Витрина спросит статус у площадки по этому имени: файла нет — нет статуса."""
+    ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
+    assert (КОРЕНЬ / ".github" / "workflows" / ф["ci"]["workflow"]).is_file()
+
+
+def test_по_каждому_показателю_значение_или_причина() -> None:
+    """Правило договора одно, третьего исхода нет."""
+    ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
+    for ключ in facts.ПОКАЗАТЕЛИ:
+        assert (ключ in ф) != (ключ in ф.get("none", {})), ключ
+
+
+def test_версия_та_же_что_у_значка() -> None:
+    """Значок и факты называют одну версию одним числом."""
+    import preflight
+
+    ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
+    assert ф["version"] == preflight.project_version(КОРЕНЬ)
+
+
+def test_короткий_коммит_это_отказ() -> None:
+    with pytest.raises(ValueError, match="полный SHA"):
+        facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ, commit="0123abc")
+
+
+def test_причина_только_у_допустимых_ключей(tmp_path: Path) -> None:
+    """Ключ `none` сверх перечня схема витрины отвергнет: `rules` туда не идёт."""
+    ф = facts.build(tmp_path, repo=РЕПОЗИТОРИЙ)
+    assert set(ф["none"]) <= set(facts.ПОКАЗАТЕЛИ)
+    assert all(isinstance(v, str) and v for v in ф["none"].values())
 
 
 def test_отметка_времени_с_поясом() -> None:
@@ -176,16 +234,102 @@ def test_пустое_дерево_даёт_минимум_и_ни_одного_
     издатель, а не сборщик, — и здесь оно уже принято в пользу «заводить».
     """
     ф = facts.build(tmp_path, repo=РЕПОЗИТОРИЙ)
-    assert set(ф) == {"schema", "schema_of", "repo", "generated_at"}
+    assert set(ф) == {
+        "schema",
+        "schema_of",
+        "repo",
+        "generated_at",
+        "commit",
+        "ci",
+        "none",
+    }
+    assert set(ф["none"]) == set(facts.ПОКАЗАТЕЛИ), "нулей нет — есть причины"
+
+
+def test_источник_есть_а_числа_нет_файл_не_собирается(tmp_path: Path) -> None:
+    """«Не посчитали» в `none` выдало бы поломку за отсутствие предмета."""
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / facts.CI_WORKFLOW).write_text(
+        _прогон(matrix="        include:\n          - os: x\n"), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="число не вышло"):
+        facts.build(tmp_path, repo=РЕПОЗИТОРИЙ)
 
 
 def test_версия_говорит_чего_она() -> None:
-    """Ключ `schema` есть и у соседних файлов, а предметы у них разные."""
-    assert facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)["schema_of"] == "facts"
+    """Ключ `schema` есть и у соседних файлов, а предметы у них разные: строка
+    называет договор так, чтобы его можно было найти."""
+    чего = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)["schema_of"]
+    assert "ArtVsMark/ArtVsMark" in чего
+    assert "facts.schema.json" in чего
+
+
+# ── выпуск: на настоящем git ────────────────────────────────────────────────
+
+
+@pytest.fixture
+def репозиторий(tmp_path: Path) -> Path:
+    """Полная история с одним коммитом и без тегов."""
+    subprocess.run(
+        ["git", "init", "-q", "-b", "main", str(tmp_path)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    _git(tmp_path, "config", "user.email", "t@e.st")
+    _git(tmp_path, "config", "user.name", "Тест")
+    (tmp_path / "файл").write_text("x", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "начало")
+    return tmp_path
+
+
+def test_тег_выпуска_публикуется(репозиторий: Path) -> None:
+    _git(репозиторий, "tag", "v0.2.0")
+    assert _ВЫПУСК(репозиторий) == "v0.2.0"
+
+
+def test_полная_история_без_тегов_это_выпусков_нет(репозиторий: Path) -> None:
+    assert _ВЫПУСК(репозиторий) is None
+
+
+def test_мелкий_клон_это_отказ_а_не_выпусков_нет(
+    репозиторий: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Ровно та ложь, что у витрины уже была: «не выпускался ни разу» (#59)."""
+    _git(репозиторий, "tag", "v0.1.0")
+    (репозиторий / "файл").write_text("y", encoding="utf-8")
+    _git(репозиторий, "commit", "-q", "-am", "дальше")
+    мелкий = tmp_path_factory.mktemp("мелкий")
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-tags",
+            f"file://{репозиторий}",
+            str(мелкий),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
+    with pytest.raises(ValueError, match="мелкий"):
+        _ВЫПУСК(мелкий)
+
+
+def test_не_git_это_отказ(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="не git"):
+        _ВЫПУСК(tmp_path)
 
 
 def test_main_пишет_файл_по_адресу_контракта(tmp_path: Path) -> None:
     (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_x.py").write_text(
+        "def test_x() -> None: ...\n", encoding="utf-8"
+    )
     код = facts.main([str(tmp_path), "--repo", РЕПОЗИТОРИЙ])
     assert код == 0
     записано = json.loads((tmp_path / facts.FACTS_PATH).read_text(encoding="utf-8"))

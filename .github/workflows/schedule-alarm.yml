@@ -25,6 +25,7 @@ on:
     workflows:
       - очередь мержей
       - rules-inbox
+      - значки
     types:
       - completed
 
