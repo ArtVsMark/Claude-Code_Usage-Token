@@ -27,9 +27,12 @@
 > rule — the project publishes about itself, machine-readable:
 > `.github/badges/facts.json` on the `badges` branch, built by
 > `scripts/facts.py`. That is an answer to a neighbouring showcase, not a
-> picture for a reader, and the questions differ. A section that cannot be
-> counted **exactly** does not go into the file at all: a missing key means «not
-> measured», whereas a zero in its place would read as a measured answer.
+> picture for a reader, and the questions differ. The format is contract 1.2 of
+> the profile showcase: for every indicator there is **a value or a reason** in
+> `none`, nothing in between. A reason is written only where there is no
+> subject; if the source exists but no **exact** number comes out, the file is
+> not built at all, because a zero or «not counted» in its place would read as
+> a measured answer.
 >
 > The gap is named because a missing badge and a frozen badge look
 > **identical** from the outside. This is held by the `scripts/preflight.py`
