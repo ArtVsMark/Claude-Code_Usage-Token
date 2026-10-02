@@ -2,14 +2,14 @@
   "schema": "1.2",
   "schema_of": "договор facts.json витрины профиля ArtVsMark/ArtVsMark (.rules/facts.schema.json)",
   "repo": "ArtVsMark/Claude-Code_Usage-Token",
-  "generated_at": "2026-10-02T08:19:54+00:00",
-  "commit": "9dced3b825a78f9cb46f298af9194c63bc64f8c4",
+  "generated_at": "2026-10-02T08:24:52+00:00",
+  "commit": "c7d27a7e8b9cbc1261541948bea566912d1e6082",
   "ci": {
     "workflow": "ci.yml"
   },
   "version": "0.2.0",
   "tests": {
-    "functions": 568,
+    "functions": 576,
     "modules": 34
   },
   "python": {
