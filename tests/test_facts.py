@@ -177,7 +177,7 @@ def test_испорченные_ответы_каталогу_не_дают_ра
 def test_обязательный_минимум_на_месте() -> None:
     """Минимум договора 1.2: без него витрина файл не примет вовсе."""
     ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
-    assert ф["schema"] == "1.2"
+    assert ф["schema"] == "1.3"
     assert isinstance(ф["schema"], str), "версия строкой: 1.0 и 1.10 иначе не различить"
     assert ф["repo"] == РЕПОЗИТОРИЙ
     assert datetime.fromisoformat(ф["generated_at"]).tzinfo is not None
@@ -432,3 +432,28 @@ def test_источник_есть_а_числа_нет_это_потеря(tmp_
     assert "checks_per_pr" in потеряно
     assert "python" in потеряно
     assert "tests" not in потеряно, "каталога тестов там нет — терять нечего"
+
+
+# ── выпуск — серия X.Y, договор 1.3 (#143) ──────────────────────────────────
+
+
+def test_серия_из_тега() -> None:
+    """Третья цифра тега выпуска всегда 0, буква v — запись тега, а не выпуска."""
+    assert facts.серия("v0.2.0") == "0.2"
+    assert facts.серия("v1.11.0") == "1.11"
+
+
+def test_не_тег_схемы_это_отказ() -> None:
+    with pytest.raises(ValueError, match=r"vX\.Y\.Z"):
+        facts.серия("0.2")
+
+
+def test_выпуск_в_фактах_серией(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Версия начинается с серии и точки — так её сверяет витрина."""
+    monkeypatch.setattr(facts, "выпуск", lambda root: "v0.2.0")
+    monkeypatch.setattr(facts, "версия", lambda root: "0.2.41")
+
+    ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
+
+    assert ф["release"] == "0.2"
+    assert ф["version"].startswith(ф["release"] + ".")
