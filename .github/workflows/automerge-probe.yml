@@ -1,0 +1,51 @@
+# Проба авто-мержа до доверия (#165, шаг 2).
+#
+# Взводит авто-мерж на НАЗВАННОМ PR, читает взвод обратно и сразу снимает.
+# Проверяется одно: принимает ли площадка наши заголовок и тело уплотнения
+# как есть. От тела зависит подпись в истории (правило 123), и поведение
+# площадки здесь замеряется, а не предполагается — предположение уже стоило
+# трёх коммитов без подписи (#108–#110).
+#
+# Только по кнопке: проба трогает настоящий PR. Годится PR с КРАСНЫМ
+# «PR check» на голове — зелёный взведённый площадка сольёт; на любом другом
+# скрипт отказывает до первой мутации.
+name: проба авто-мержа
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: номер PR с красным «PR check»
+        type: number
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automerge-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: взвести, прочитать, снять
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # Тот же токен владельца, что у очереди: взвод — запись, несущая личность
+    # (правило 131), и штатный токен прогона её не сделает.
+    env:
+      MERGE_QUEUE_TOKEN: ${{ secrets.MERGE_QUEUE_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: проба
+        env:
+          GH_TOKEN: ${{ env.MERGE_QUEUE_TOKEN }}
+          PR: ${{ inputs.pr }}
+        run: python scripts/automerge.py --probe "$PR"
