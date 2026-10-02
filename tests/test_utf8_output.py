@@ -212,6 +212,25 @@ def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None
     assert "плохой.py" in ответ.stdout
 
 
+def test_пустой_предмет_это_не_отработал(tmp_path: Path) -> None:
+    """Третий исход (#151): ноль скриптов — «проверять нечего», а не «чисто»."""
+    ответ = subprocess.run(
+        [
+            sys.executable,
+            str(КОРЕНЬ / "scripts" / "utf8_output.py"),
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+
+    assert ответ.returncode == utf8_output.EXIT_BROKEN
+    assert "не отработал" in ответ.stderr
+
+
 # ── точка входа пакета (#69) ──────────────────────────────────────────────
 #
 # У неё нет блока `__main__`: обёртку делает установщик, а признака в самом

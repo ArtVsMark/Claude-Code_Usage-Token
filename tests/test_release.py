@@ -184,6 +184,26 @@ def test_прогон_отказывает_ненулевым_кодом(
     assert "выпуск не готов" in вывод.err
 
 
+@pytest.mark.parametrize("порча", ["нет", "мусор"])
+def test_непроверяемое_колесо_это_третий_исход(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], порча: str
+) -> None:
+    """«Колеса нет» и «не читается» — о сборке, а не о выпуске (#151).
+
+    Прежде оба уходили находкой с кодом 1: непроверенное называлось плохим.
+    """
+    колесо = tmp_path / "x-0.1.0-py3-none-any.whl"
+    if порча == "мусор":
+        колесо.write_bytes(b"not a zip")
+
+    код = release.main(
+        ["--tag", "v0.1.0", "--version", "0.1.0", "--wheel", str(колесо)]
+    )
+
+    assert код == release.EXIT_BROKEN
+    assert "не проверен" in capsys.readouterr().err
+
+
 def test_прогон_проходит_на_целом_колесе(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
