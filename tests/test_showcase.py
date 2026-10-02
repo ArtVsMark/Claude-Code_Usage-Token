@@ -198,7 +198,7 @@ def _контракт(
         ".rules/bindings.json",
         json.dumps(
             {
-                "schema": "1.1",
+                "schema": "1.7",
                 "project": "Владелец/Проект",
                 "rules": {"001": {"status": "unreviewed"}},
             },

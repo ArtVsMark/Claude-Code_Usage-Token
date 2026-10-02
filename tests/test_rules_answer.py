@@ -157,7 +157,16 @@ def test_отказ_без_причины_это_не_ответ() -> None:
 def test_none_обязан_сказать_чем_держится() -> None:
     """`active` с `mechanism=none` законен, но молчание вместо объяснения — нет."""
     сообщения = _сообщения(
-        _ответ(**{"048": {"status": "active", "mechanism": "none", "where": ""}})
+        _ответ(
+            **{
+                "048": {
+                    "status": "active",
+                    "mechanism": "none",
+                    "where": "",
+                    "machine_half": "сверка X с Y; не построено",
+                }
+            }
+        )
     )
 
     assert len(сообщения) == 1
@@ -256,3 +265,106 @@ def test_обе_стороны_сверки_ответа_названы_свои
     assert len(про_схему) == 1
     assert "Обе стороны сравнения НАШИ" in про_схему[0].message
     assert "контракт требует" not in про_схему[0].message
+
+
+# ── формат ответа 1.7 (#139) ────────────────────────────────────────────────
+
+_НИЧЕМ: dict[str, Any] = {
+    "status": "active",
+    "mechanism": "none",
+    "where": "НЕ ДЕРЖИТСЯ НИЧЕМ: причина",
+    "machine_half": "сверка X с Y; не построено",
+}
+
+
+def test_none_без_машинной_половины_это_отказ() -> None:
+    """Контракт 1.7: у active + none machine_half обязателен."""
+    запись = {k: v for k, v in _НИЧЕМ.items() if k != "machine_half"}
+
+    сообщения = _сообщения(_ответ(**{"048": запись}))
+
+    assert len(сообщения) == 1
+    assert "machine_half" in сообщения[0]
+
+
+def test_holdable_вне_словаря_это_отказ() -> None:
+    сообщения = _сообщения(
+        _ответ(**{"048": {**_НИЧЕМ, "holdable": "impossible", "why": "x"}})
+    )
+
+    assert any("не из" in с for с in сообщения)
+
+
+def test_holdable_у_гейта_это_отказ() -> None:
+    """Вопрос «можно ли машиной» у того, что машиной уже держится, бессмыслен."""
+    запись = {
+        "status": "active",
+        "mechanism": "gate",
+        "where": "scripts/rules_answer.py",
+        "holdable": "no",
+        "why": "x",
+    }
+
+    сообщения = _сообщения(_ответ(**{"048": запись}))
+
+    assert any("holdable спрашивается только" in с for с in сообщения)
+
+
+def test_conditional_без_события_это_отказ() -> None:
+    сообщения = _сообщения(
+        _ответ(**{"048": {**_НИЧЕМ, "holdable": "conditional", "why": "x"}})
+    )
+
+    assert any("awaiting" in с for с in сообщения)
+
+
+def test_refused_без_замера_это_отказ() -> None:
+    """213: отказ законен только с замером в machine_half."""
+    запись = {
+        "status": "active",
+        "mechanism": "document",
+        "where": "CLAUDE.md",
+        "holdable": "refused",
+        "why": "x",
+    }
+
+    сообщения = _сообщения(_ответ(**{"048": запись}))
+
+    assert any("refused" in с for с in сообщения)
+
+
+def test_решено_позже_сверки_это_отказ() -> None:
+    """Решают, посмотрев: decided не позже analysed и не без него."""
+    позже = {**_НИЧЕМ, "analysed": "2026-10-01", "decided": "2026-10-02"}
+    без = {**_НИЧЕМ, "decided": "2026-10-02"}
+
+    assert any("позже" in с for с in _сообщения(_ответ(**{"048": позже})))
+    assert any("без analysed" in с for с in _сообщения(_ответ(**{"048": без})))
+
+
+def test_прежнее_имя_поля_не_пишется() -> None:
+    запись = {"status": "active", "mechanism": "document", "where": "CLAUDE.md"}
+    запись["document_reason"] = "impossible"
+
+    assert any("прежнее имя" in с for с in _сообщения(_ответ(**{"048": запись})))
+
+
+def test_навык_плагина_принимается_своего_нет(tmp_path: Path) -> None:
+    """Адрес навыка: плагин каталога по форме, свой — по SKILL.md в дереве."""
+    плагин = {"status": "active", "mechanism": "skill", "skill": "catalogue:answer"}
+    свой = {"status": "active", "mechanism": "skill", "skill": ".claude/skills/нет"}
+
+    assert _сообщения(_ответ(**{"048": плагин}), root=tmp_path) == []
+    assert any(
+        "SKILL.md" in с for с in _сообщения(_ответ(**{"048": свой}), root=tmp_path)
+    )
+
+
+def test_без_держимости_считается_а_не_отказ() -> None:
+    """Задним числом поле не проставляется: пробел — число, а не красное."""
+    запись = {"status": "active", "mechanism": "document", "where": "CLAUDE.md"}
+
+    результат = rules_answer.check_answer(_ответ(**{"048": запись}), root=КОРЕНЬ)
+
+    assert результат.находки == []
+    assert результат.без_держимости == 1
