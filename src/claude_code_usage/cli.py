@@ -129,13 +129,18 @@ def _sample(аргументы: argparse.Namespace) -> int:
         )
         return EXIT_USAGE
 
-    try:
-        хранилище = storage.store_path(аргументы.store)
-    except storage.StoreError as отказ:
-        print(str(отказ), file=sys.stderr)
-        return EXIT_USAGE
-
+    # ХРАНИЛИЩЕ НУЖНО ТОЛЬКО ТОМУ, КТО ПИШЕТ (#114). Сухой прогон зовут ровно
+    # до заведения хранилища — посмотреть, что в него попадёт, — и требовать
+    # путь здесь значило бы требовать тот шаг, ради осмотра которого звали.
+    # `--no-push` не сюда: там запись есть, и хранилище обязано быть.
+    хранилище: Path | None = None
     if not аргументы.dry_run:
+        try:
+            хранилище = storage.store_path(аргументы.store)
+        except storage.StoreError as отказ:
+            print(str(отказ), file=sys.stderr)
+            return EXIT_USAGE
+
         беды = storage.readiness(хранилище)
         if беды:
             print("хранилище не готово:", file=sys.stderr)
@@ -200,6 +205,7 @@ def _sample(аргументы: argparse.Namespace) -> int:
             print(json.dumps(строка, ensure_ascii=False, sort_keys=True))
         print(f"строк собрано {len(строки)}, ничего не записано (--dry-run)")
         return 0
+    assert хранилище is not None, "не сухой прогон без хранилища отказал выше"
 
     рано = _too_soon(хранилище, строки, аргументы.min_interval, метка)
     if рано:
