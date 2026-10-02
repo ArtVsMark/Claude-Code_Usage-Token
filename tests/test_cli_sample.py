@@ -388,3 +388,32 @@ def test_окна_без_расхода_считаются_в_числе_зап�
 
     assert len(строки) == 1, "строка пишется только там, где есть расход"
     assert строки[0]["sessions"] == 2, "а записей в выгрузке было две"
+
+
+# ── сухой прогон без хранилища (#114) ───────────────────────────────────────
+
+
+def test_сухой_прогон_не_требует_хранилища(
+    выгрузка: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Сухой прогон зовут ДО заведения хранилища — посмотреть, что попадёт."""
+    monkeypatch.delenv(storage.ENV_STORE, raising=False)
+
+    код = cli.main(["sample", "--registry", str(выгрузка), "--dry-run"])
+
+    вывод = capsys.readouterr().out
+    assert код == 0
+    assert any(с.startswith("{") for с in вывод.splitlines()), "строк не напечатано"
+    assert "ничего не записано" in вывод
+
+
+def test_запись_без_хранилища_по_прежнему_отказ(
+    выгрузка: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Граница починки: где запись есть, хранилище обязано быть."""
+    monkeypatch.delenv(storage.ENV_STORE, raising=False)
+
+    assert cli.main(["sample", "--registry", str(выгрузка)]) == cli.EXIT_USAGE
+    assert (
+        cli.main(["sample", "--registry", str(выгрузка), "--no-push"]) == cli.EXIT_USAGE
+    )
