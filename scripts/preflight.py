@@ -167,7 +167,7 @@ def scan_for_secrets(paths: Iterable[Path]) -> ScanResult:
 
         try:
             text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             # Двоичный файл: искать шаблоны в нём нечем. Пропуск **считается**
             # и попадает в вывод — молчаливый пропуск однажды уже спрятал
             # дефект перечисления.

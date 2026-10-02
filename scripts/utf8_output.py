@@ -254,7 +254,7 @@ def entry_points(root: Path) -> list[Path]:
     """
     try:
         данные = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError):
+    except OSError, tomllib.TOMLDecodeError, UnicodeDecodeError:
         return []
 
     проект = данные.get("project")
@@ -320,7 +320,7 @@ def check_tree(root: Path, *, files: Sequence[Path] | None = None) -> Резул
         try:
             текст = путь.read_text(encoding="utf-8")
             дерево = ast.parse(текст, filename=str(путь))
-        except (OSError, UnicodeDecodeError, SyntaxError):
+        except OSError, UnicodeDecodeError, SyntaxError:
             не_предмет += 1
             continue
         запускается = путь.resolve() in объявленные

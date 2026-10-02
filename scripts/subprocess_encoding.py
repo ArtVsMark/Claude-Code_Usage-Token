@@ -268,7 +268,7 @@ def check_tree(root: Path, *, files: Sequence[Path] | None = None) -> Резул
     for путь in исходники:
         try:
             текст = путь.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             пропущено += 1
             continue
         относительный = путь.relative_to(root).as_posix()

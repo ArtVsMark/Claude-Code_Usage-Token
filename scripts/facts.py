@@ -305,7 +305,7 @@ def тесты(root: Path) -> dict[str, int] | None:
     for модуль in модули:
         try:
             дерево = ast.parse(модуль.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
+        except OSError, SyntaxError:
             return None
         функций += sum(
             1
@@ -332,7 +332,7 @@ def покрытие(root: Path) -> float | None:
     try:
         данные = json.loads(файл.read_text(encoding="utf-8"))
         значение = данные["totals"]["percent_covered"]
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError, ValueError, KeyError, TypeError:
         return None
     return round(float(значение), 1)
 
@@ -350,7 +350,7 @@ def правила(root: Path) -> dict[str, int] | None:
         return None
     try:
         записи = json.loads(файл.read_text(encoding="utf-8"))["rules"]
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         return None
     if not isinstance(записи, dict):
         return None
@@ -378,7 +378,7 @@ def версия(root: Path) -> str | None:
     """
     try:
         return preflight.project_version(root)
-    except (OSError, ValueError, TypeError, KeyError):
+    except OSError, ValueError, TypeError, KeyError:
         return None
 
 

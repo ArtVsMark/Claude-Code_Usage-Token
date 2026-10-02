@@ -179,7 +179,7 @@ def check_tree(
     for файл in tracked_files(root) if files is None else files:
         try:
             текст = файл.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             # Двоичное или нечитаемое — ссылок в нём не бывает.
             continue
         путь = файл.relative_to(root).as_posix()

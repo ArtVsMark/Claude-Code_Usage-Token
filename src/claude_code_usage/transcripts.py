@@ -205,7 +205,7 @@ def _records(path: Path) -> Iterator[tuple[dict[str, object] | None, bool]]:
                 continue
             try:
                 запись = json.loads(строка)
-            except (ValueError, UnicodeDecodeError):
+            except ValueError, UnicodeDecodeError:
                 yield None, True
                 continue
             yield (

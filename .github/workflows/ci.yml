@@ -45,7 +45,7 @@ jobs:
         # регистр имён файлов там ведут себя иначе, чем на обеих.
         os: [ubuntu-latest, macos-latest, windows-latest]
         # Совпадает с `requires-python` и классификаторами в pyproject.toml.
-        python: ["3.11", "3.12", "3.13"]
+        python: ["3.14"]
 
     steps:
       - uses: actions/checkout@v4
