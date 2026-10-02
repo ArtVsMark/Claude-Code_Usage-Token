@@ -20,8 +20,12 @@ import subprocess_encoding
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 
 
-def _находки(исходник: str) -> list[str]:
-    return [н.message for н in subprocess_encoding.check_text(исходник, "ф.py")]
+def _находки(исходник: str, *, импорт: str = "import subprocess\n") -> list[str]:
+    """Находки по исходнику. Импорт добавляется: гейт судит по импортам файла,
+    и подделка без него проверяла бы не код, а собственную неполноту."""
+    return [
+        н.message for н in subprocess_encoding.check_text(импорт + исходник, "ф.py")
+    ]
 
 
 def test_ровно_инцидент() -> None:
@@ -83,8 +87,24 @@ def test_неконстантный_флаг_краснеет() -> None:
 
 
 def test_чужая_функция_с_тем_же_именем_аргумента_не_трогается() -> None:
-    """Граница гейта: проверяются вызовы, похожие на subprocess, по имени функции."""
     assert _находки("нарисовать(подпись, text=True)") == []
+
+
+def test_своя_функция_с_именем_из_subprocess_не_находка() -> None:
+    """Ложная находка #151: судили по последнему звену, и своя `run` краснела."""
+    assert _находки("pr_check.run(['x'], text=True)", импорт="import pr_check\n") == []
+    assert _находки("run(['x'], text=True)", импорт="from pr_check import run\n") == []
+
+
+def test_псевдоним_функции_не_прячет_вызов() -> None:
+    """Пропуск #151: `from subprocess import run as запустить` проходил мимо."""
+    импорт = "from subprocess import run as запустить\n"
+    assert len(_находки("запустить(['git'], text=True)", импорт=импорт)) == 1
+
+
+def test_псевдоним_модуля_не_прячет_вызов() -> None:
+    импорт = "import subprocess as sp\n"
+    assert len(_находки("sp.check_output(['git'], text=True)", импорт=импорт)) == 1
 
 
 def test_дерево_проекта_чистое() -> None:
@@ -147,7 +167,9 @@ def test_гейт_отдаёт_ненулевой_код(tmp_path: Path) -> None
     """
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, timeout=30)
     подделка = tmp_path / "плохо.py"
-    подделка.write_text('subprocess.run(["git"], text=True)\n', encoding="utf-8")
+    подделка.write_text(
+        'import subprocess\nsubprocess.run(["git"], text=True)\n', encoding="utf-8"
+    )
     subprocess.run(["git", "add", "плохо.py"], cwd=tmp_path, check=True, timeout=30)
 
     ответ = _прогон(tmp_path)
