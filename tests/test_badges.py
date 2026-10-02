@@ -157,3 +157,30 @@ def test_набор_проекта_собирается(
         assert лежит == preflight.expected_badge(qid, КОРЕНЬ), (
             f"{qid}: собранное разошлось с источником"
         )
+
+
+def test_зона_собирается_своим_источником(tmp_path: Path) -> None:
+    """Картинку рисует действие каталога; сборщик собирает только источник.
+
+    Без этого сборщик записал бы JSON значка версии в `python.svg` — то есть
+    затёр бы картинку числом.
+    """
+    _витрина(
+        tmp_path,
+        [
+            {
+                **ЗНАЧОК,
+                "badge": ".github/badges/python.svg",
+                "zone": "version",
+                "source": ".github/badges/version.json",
+            },
+            {
+                "id": "ci",
+                "ask": "зелены ли проверки",
+                "badge": ".github/badges/python.svg",
+                "zone": "Python",
+            },
+        ],
+    )
+
+    assert badges.declared(tmp_path) == [("version", ".github/badges/version.json")]

@@ -889,3 +889,113 @@ def test_замечание_о_собранном_не_меняет_код_во�
     assert preflight.main([]) == 0
     # Сводка идёт в stderr — туда же, куда и остальные замечания.
     assert "в дереве лежит собранное" in capsys.readouterr().err
+
+
+# ── ответ зоной единого значка (#128) ───────────────────────────────────────
+
+_ЕДИНЫЙ = ".github/badges/python.svg"
+_ШАГ = (
+    "jobs:\n  publish:\n    steps:\n"
+    f"      - uses: {preflight.COMPOSITE_ACTION}v1.6.0\n"
+    "        with:\n"
+    "          version-json: .github/badges/version.json\n"
+    "          out: {out}\n"
+)
+
+
+def _зона(
+    каталог: Path,
+    вопрос: dict[str, Any],
+    *,
+    шаг: str | None = _ШАГ.format(out=_ЕДИНЫЙ),
+) -> Path:
+    """Дерево с ответом зоной: витрины показывают единый значок."""
+    показ = "Значок: python.svg\n"
+    _контракт(каталог, [ПРОБЕЛ, вопрос], _ВИТРИНА_RU + показ, _ВИТРИНА_EN + показ)
+    if шаг is not None:
+        _файл(каталог, preflight.BADGES_WORKFLOW, шаг)
+    return каталог
+
+
+_ВЕРСИЯ_ЗОНОЙ: dict[str, Any] = {
+    "id": "version",
+    "ask": "какая версия у текущей головы",
+    "badge": _ЕДИНЫЙ,
+    "branch": "badges",
+    "zone": "version",
+    "source": ".github/badges/version.json",
+}
+
+
+def test_зона_с_шагом_и_источником_проходит(tmp_path: Path) -> None:
+    корень = _зона(tmp_path, _ВЕРСИЯ_ЗОНОЙ)
+    _источник_версии(корень)
+
+    assert preflight.check_showcase(корень).findings == []
+
+
+def test_зона_без_источника_не_требует_правила_вывода(tmp_path: Path) -> None:
+    """Зону CI красит площадка: считать её в дереве нечем и не нужно."""
+    вопрос = {
+        "id": "ci",
+        "ask": "зелены ли обязательные проверки на общей ветке",
+        "badge": _ЕДИНЫЙ,
+        "branch": "badges",
+        "zone": "Python",
+    }
+
+    assert preflight.check_showcase(_зона(tmp_path, вопрос)).findings == []
+
+
+def test_зона_без_рисующего_шага_находится(tmp_path: Path) -> None:
+    """Витрина, ссылающаяся на картинку, которую никто не рисует."""
+    корень = _зона(tmp_path, _ВЕРСИЯ_ЗОНОЙ, шаг="jobs: {}\n")
+    _источник_версии(корень)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "шага, который его рисует" in находки[0]
+
+
+def test_шаг_пишет_другой_файл_находится(tmp_path: Path) -> None:
+    корень = _зона(tmp_path, _ВЕРСИЯ_ЗОНОЙ, шаг=_ШАГ.format(out=".github/x.svg"))
+    _источник_версии(корень)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "пишет не" in находки[0]
+
+
+def test_зона_не_названа_находится(tmp_path: Path) -> None:
+    корень = _зона(tmp_path, {**_ВЕРСИЯ_ЗОНОЙ, "zone": " "})
+    _источник_версии(корень)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 1
+    assert "зона" in находки[0]
+
+
+def test_источник_без_правила_вывода_находится(tmp_path: Path) -> None:
+    """Зона стала бы серой «—» при живом числе в дереве."""
+    вопрос = {
+        **_ВЕРСИЯ_ЗОНОЙ,
+        "id": "tests",
+        "ask": "сколько тестов в наборе",
+        "source": ".github/badges/tests.json",
+    }
+
+    находки = preflight.check_showcase(_зона(tmp_path, вопрос)).findings
+
+    assert len(находки) == 1
+    assert "правила его вывода" in находки[0]
+
+
+def test_витрина_проекта_отвечает_единым_значком() -> None:
+    """Не подделка: четыре вопроса живого набора отвечают зонами (#128)."""
+    набор = json.loads((КОРЕНЬ / preflight.SHOWCASE_SET).read_text(encoding="utf-8"))
+    зоны = {q["id"] for q in набор["questions"] if "zone" in q}
+
+    assert зоны == {"ci", "release", "version", "coverage"}
