@@ -527,6 +527,52 @@ def test_упоминание_набора_не_считается_ссылко�
     assert all("нет ссылки" in находка for находка in находки)
 
 
+@pytest.mark.parametrize(
+    "цель",
+    [
+        "(.rules/showcase.json.old)",
+        "(.rules/showcase.jsonl)",
+        "(.rules/showcase.json-old)",
+        ": .rules/showcase.json.bak",
+    ],
+)
+def test_подменённая_цель_с_тем_же_началом_не_ссылка(tmp_path: Path, цель: str) -> None:
+    """Ложное зелёное #151: цель ссылки сверялась началом.
+
+    `.rules/showcase.json.old` начинается с пути набора, и гейт засчитывал её —
+    то есть держал класс правила 166, которое каталог принял от нас именно
+    отсюда, и сам же его нарушал.
+    """
+    витрина = (
+        f"# Заголовок\n\n[набор]{цель}\n"
+        if цель.startswith("(")
+        else f"# Заголовок\n\nНабор — [здесь][н].\n\n[н]{цель}\n"
+    )
+    корень = _контракт(tmp_path, ru=витрина, en=витрина)
+
+    находки = preflight.check_showcase(корень).findings
+
+    assert len(находки) == 2
+    assert all("нет ссылки" in находка for находка in находки)
+
+
+@pytest.mark.parametrize(
+    "ссылка",
+    [
+        "[набор](.rules/showcase.json)",
+        "[набор](<.rules/showcase.json>)",
+        "[набор](.rules/showcase.json#пробелы)",
+        '[набор](.rules/showcase.json "набор вопросов")',
+    ],
+)
+def test_законные_формы_цели_считаются_ссылкой(tmp_path: Path, ссылка: str) -> None:
+    """Обратная сторона закрепления конца: якорь, угловые скобки и заголовок."""
+    витрина = f"# Заголовок\n\n{ссылка}\n"
+    корень = _контракт(tmp_path, ru=витрина, en=витрина)
+
+    assert preflight.check_showcase(корень).findings == []
+
+
 def test_ссылка_сноской_считается_ссылкой(tmp_path: Path) -> None:
     """Обратная сторона: заворачивать законную разметку тоже нельзя."""
     сноской = (
