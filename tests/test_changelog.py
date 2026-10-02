@@ -34,10 +34,62 @@ def _дерево(tmp_path: Path, файлы: dict[str, str]) -> Path:
 
 
 def test_запись_по_формату_разбирается(tmp_path: Path) -> None:
-    путь = _фрагмент(tmp_path, "10.added.md", "Записи едут фрагментами.\n")
+    путь = _фрагмент(tmp_path, "z10.added.md", "Записи едут фрагментами.\n\n#10\n")
     разобрано = changelog.parse(путь)
     assert isinstance(разобрано, changelog.Fragment)
     assert (разобрано.issue, разобрано.kind) == (10, "added")
+
+
+def test_имя_из_одного_номера_отвергается(tmp_path: Path) -> None:
+    """Прежняя схема (#158): номер в имени склеивал изменения одной задачи.
+
+    За одну серию все порции по #151 писали в один `151.fixed.md`: три
+    конфликта слияния подряд и запись из пяти несвязанных строк.
+    """
+    путь = _фрагмент(tmp_path, "151.fixed.md", "Исправлено.\n\n#151\n")
+    претензия = changelog.parse(путь)
+    assert isinstance(претензия, str)
+    assert "из одного номера" in претензия
+
+
+def test_номер_задачи_берётся_из_последней_строки(tmp_path: Path) -> None:
+    путь = _фрагмент(tmp_path, "gate-fixed.fixed.md", "Гейт починен.\n\n#151\n")
+    разобрано = changelog.parse(путь)
+    assert isinstance(разобрано, changelog.Fragment)
+    assert (разобрано.slug, разобрано.issue) == ("gate-fixed", 151)
+    assert разобрано.body == "Гейт починен."
+
+
+def test_без_номера_последней_строкой_отказ(tmp_path: Path) -> None:
+    """Без номера запись не сверить с изменением, которое её привезло."""
+    for текст in ("Гейт починен.\n", "#151\n\nГейт починен.\n"):
+        путь = _фрагмент(tmp_path, "gate-fixed.fixed.md", текст)
+        претензия = changelog.parse(путь)
+        assert isinstance(претензия, str), текст
+        assert "номера задачи" in претензия
+
+
+def test_internal_без_причины_отказ(tmp_path: Path) -> None:
+    """«Потребителю не нужно» без причины неотличимо от «забыли» (154)."""
+    путь = _фрагмент(tmp_path, "tests-moved.internal.md", "Тесты переложены.\n\n#9\n")
+    претензия = changelog.parse(путь)
+    assert isinstance(претензия, str)
+    assert "причину" in претензия
+
+
+def test_internal_с_причиной_собирается_в_свой_раздел(tmp_path: Path) -> None:
+    текст = (
+        f"{changelog.INTERNAL_REASON} поставленный пакет не меняется.\n"
+        "Тесты переложены.\n\n#9\n"
+    )
+    корень = _дерево(tmp_path, {"tests-moved.internal.md": текст})
+    фрагменты, претензии = changelog.collect(корень)
+    assert претензии == []
+
+    раздел = changelog.render(фрагменты, "v0.1.0")
+    assert "### Внутреннее" in раздел
+    assert "Потребителю безразлично" in раздел
+    assert "> " not in раздел
 
 
 def test_имя_не_по_формату_находится(tmp_path: Path) -> None:
@@ -47,7 +99,7 @@ def test_имя_не_по_формату_находится(tmp_path: Path) -> N
 
 def test_неизвестный_вид_находится(tmp_path: Path) -> None:
     """Список видов закрытый: неизвестный раздел потерялся бы при сборке молча."""
-    путь = _фрагмент(tmp_path, "10.improved.md", "Текст.\n")
+    путь = _фрагмент(tmp_path, "z10.improved.md", "Текст.\n\n#10\n")
     претензия = changelog.parse(путь)
     assert isinstance(претензия, str)
     assert "неизвестен" in претензия
@@ -55,7 +107,7 @@ def test_неизвестный_вид_находится(tmp_path: Path) -> Non
 
 def test_пустая_запись_находится(tmp_path: Path) -> None:
     """Пустой файл — то же, что отсутствие записи, но выглядит как наличие."""
-    путь = _фрагмент(tmp_path, "10.added.md", "   \n\n")
+    путь = _фрагмент(tmp_path, "z10.added.md", "   \n\n")
     претензия = changelog.parse(путь)
     assert isinstance(претензия, str)
     assert "пустая запись" in претензия
@@ -64,7 +116,8 @@ def test_пустая_запись_находится(tmp_path: Path) -> None:
 def test_readme_не_считается_записью(tmp_path: Path) -> None:
     """Описание формата лежит рядом с записями и записью не является."""
     корень = _дерево(
-        tmp_path, {"README.md": "# Формат\n", "10.added.md": "Русская запись.\n"}
+        tmp_path,
+        {"README.md": "# Формат\n", "z10.added.md": "Русская запись.\n\n#10\n"},
     )
     фрагменты, претензии = changelog.collect(корень)
     assert len(фрагменты) == 1
@@ -82,13 +135,15 @@ def test_каталога_нет_собирать_не_из_чего(tmp_path: P
 
 
 def test_русская_запись_проходит(tmp_path: Path) -> None:
-    корень = _дерево(tmp_path, {"10.added.md": "Записи едут фрагментами.\n"})
+    корень = _дерево(tmp_path, {"z10.added.md": "Записи едут фрагментами.\n\n#10\n"})
     фрагменты, _ = changelog.collect(корень)
     assert changelog.language_warnings(фрагменты) == []
 
 
 def test_непереведённая_запись_находится(tmp_path: Path) -> None:
-    корень = _дерево(tmp_path, {"10.added.md": "Entries now ship as fragments.\n"})
+    корень = _дерево(
+        tmp_path, {"z10.added.md": "Entries now ship as fragments.\n\n#10\n"}
+    )
     фрагменты, _ = changelog.collect(корень)
     замечания = changelog.language_warnings(фрагменты)
     assert len(замечания) == 1
@@ -105,7 +160,7 @@ def test_запись_из_идентификаторов_законна(tmp_pat
     """
     корень = _дерево(
         tmp_path,
-        {"10.changed.md": f"{changelog.IDENTIFIERS_ONLY}\n`ruff` 0.6 → 0.16\n"},
+        {"z10.changed.md": f"{changelog.IDENTIFIERS_ONLY}\n`ruff` 0.6 → 0.16\n\n#10\n"},
     )
     фрагменты, _ = changelog.collect(корень)
     assert changelog.language_warnings(фрагменты) == []
@@ -114,7 +169,8 @@ def test_запись_из_идентификаторов_законна(tmp_pat
 def test_маркер_не_прячет_текст_целиком(tmp_path: Path) -> None:
     """Маркер снимает требование к языку, а не к содержанию."""
     корень = _дерево(
-        tmp_path, {"10.changed.md": f"{changelog.IDENTIFIERS_ONLY}\n`ruff` 0.16\n"}
+        tmp_path,
+        {"z10.changed.md": f"{changelog.IDENTIFIERS_ONLY}\n`ruff` 0.16\n\n#10\n"},
     )
     фрагменты, _ = changelog.collect(корень)
     assert фрагменты[0].body == "`ruff` 0.16"
@@ -143,9 +199,9 @@ def test_сборка_разносит_по_разделам(tmp_path: Path) -> 
     корень = _дерево(
         tmp_path,
         {
-            "10.added.md": "Записи фрагментами.\n",
-            "8.fixed.md": "Очередь не падает на конфликте.\n",
-            "2.added.md": "Команда снятия замера.\n",
+            "z10.added.md": "Записи фрагментами.\n\n#10\n",
+            "z8.fixed.md": "Очередь не падает на конфликте.\n\n#8\n",
+            "z2.added.md": "Команда снятия замера.\n\n#2\n",
         },
     )
     фрагменты, _ = changelog.collect(корень)
@@ -161,7 +217,7 @@ def test_сборка_разносит_по_разделам(tmp_path: Path) -> 
 
 
 def test_пустой_раздел_не_печатается(tmp_path: Path) -> None:
-    корень = _дерево(tmp_path, {"10.added.md": "Записи фрагментами.\n"})
+    корень = _дерево(tmp_path, {"z10.added.md": "Записи фрагментами.\n\n#10\n"})
     фрагменты, _ = changelog.collect(корень)
 
     собрано = changelog.render(фрагменты, "0.1.0")
@@ -171,7 +227,7 @@ def test_пустой_раздел_не_печатается(tmp_path: Path) -> 
 
 def test_многострочная_запись_склеивается(tmp_path: Path) -> None:
     """В документе запись — один пункт списка, как бы её ни разбили в файле."""
-    корень = _дерево(tmp_path, {"10.added.md": "Первая строка\nи вторая.\n"})
+    корень = _дерево(tmp_path, {"z10.added.md": "Первая строка\nи вторая.\n\n#10\n"})
     фрагменты, _ = changelog.collect(корень)
     assert "- Первая строка и вторая. (#10)" in changelog.render(фрагменты, "0.1.0")
 
@@ -184,7 +240,9 @@ def test_на_pr_язык_замечание(
 ) -> None:
     """Запись ещё правится: красное здесь приучало бы читать красное как фон."""
     monkeypatch.setattr(
-        changelog, "ROOT", _дерево(tmp_path, {"10.added.md": "In English.\n"})
+        changelog,
+        "ROOT",
+        _дерево(tmp_path, {"z10.added.md": "In English.\n\n#10\n"}),
     )
 
     assert changelog.main([]) == 0
@@ -196,7 +254,9 @@ def test_при_релизе_язык_отказ(
 ) -> None:
     """Публикация необратима, поэтому здесь запрет, а не предупреждение."""
     monkeypatch.setattr(
-        changelog, "ROOT", _дерево(tmp_path, {"10.added.md": "In English.\n"})
+        changelog,
+        "ROOT",
+        _дерево(tmp_path, {"z10.added.md": "In English.\n\n#10\n"}),
     )
 
     assert changelog.main(["--strict"]) == changelog.EXIT_FAILED
@@ -207,7 +267,7 @@ def test_отсутствие_записи_находится(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setattr(
-        changelog, "ROOT", _дерево(tmp_path, {"10.added.md": "Запись.\n"})
+        changelog, "ROOT", _дерево(tmp_path, {"z10.added.md": "Запись.\n\n#10\n"})
     )
 
     код = changelog.main(
@@ -222,11 +282,11 @@ def test_новая_запись_в_диффе_считается(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        changelog, "ROOT", _дерево(tmp_path, {"10.added.md": "Запись.\n"})
+        changelog, "ROOT", _дерево(tmp_path, {"z10.added.md": "Запись.\n\n#10\n"})
     )
 
     код = changelog.main(
-        ["--require-entry", "--changed", "src/x.py", "changelog.d/10.added.md"]
+        ["--require-entry", "--changed", "src/x.py", "changelog.d/z10.added.md"]
     )
 
     assert код == 0
@@ -270,7 +330,7 @@ def test_складывание_создаёт_свод_и_расходует_ф
     записи прошлого целиком — и увидели бы это уже на странице выпуска.
     """
     корень = _дерево_свода(
-        tmp_path, monkeypatch, **{"7__added__md": "Первая запись.\n"}
+        tmp_path, monkeypatch, **{"z7__added__md": "Первая запись.\n\n#7\n"}
     )
 
     код = changelog.main(["--fold", "--version", "v0.1.0"])
@@ -286,9 +346,13 @@ def test_второе_складывание_той_же_версии_отказ
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Иначе раздел удвоился бы, и заметки соврали бы дважды."""
-    корень = _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Запись.\n"})
+    корень = _дерево_свода(
+        tmp_path, monkeypatch, **{"z7__added__md": "Запись.\n\n#7\n"}
+    )
     changelog.main(["--fold", "--version", "v0.1.0"])
-    (корень / changelog.FRAGMENTS / "8.fixed.md").write_text("Другая.\n", "utf-8")
+    (корень / changelog.FRAGMENTS / "z8.fixed.md").write_text(
+        "Другая.\n\n#8\n", "utf-8"
+    )
 
     assert changelog.main(["--fold", "--version", "v0.1.0"]) == changelog.EXIT_FAILED
 
@@ -306,9 +370,13 @@ def test_новый_раздел_ложится_сверху(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Свежее читают первым; старые разделы остаются нетронутыми."""
-    корень = _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Первая.\n"})
+    корень = _дерево_свода(
+        tmp_path, monkeypatch, **{"z7__added__md": "Первая.\n\n#7\n"}
+    )
     changelog.main(["--fold", "--version", "v0.1.0"])
-    (корень / changelog.FRAGMENTS / "8.fixed.md").write_text("Вторая.\n", "utf-8")
+    (корень / changelog.FRAGMENTS / "z8.fixed.md").write_text(
+        "Вторая.\n\n#8\n", "utf-8"
+    )
     changelog.main(["--fold", "--version", "v0.2.0"])
 
     свод = (корень / changelog.JOURNAL).read_text(encoding="utf-8")
@@ -349,7 +417,7 @@ def test_заметки_выпуска_отказывают_без_раздел�
     Собрать заметки «как-нибудь» здесь хуже отказа: публикация необратима, и
     в выпуск уехали бы записи прошлого.
     """
-    _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Запись.\n"})
+    _дерево_свода(tmp_path, monkeypatch, **{"z7__added__md": "Запись.\n\n#7\n"})
 
     assert changelog.main(["--section", "--version", "v0.1.0"]) == changelog.EXIT_FAILED
 
@@ -358,7 +426,9 @@ def test_язык_проверяется_на_складывании(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Отказ переехал сюда из прогона выпуска — туда, где запись ещё правят."""
-    _дерево_свода(tmp_path, monkeypatch, **{"7__added__md": "Bumped ruff to 0.6.\n"})
+    _дерево_свода(
+        tmp_path, monkeypatch, **{"z7__added__md": "Bumped ruff to 0.6.\n\n#7\n"}
+    )
 
     assert (
         changelog.main(["--fold", "--strict", "--version", "v0.1.0"])
