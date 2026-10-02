@@ -38,15 +38,27 @@ EXIT_BROKEN = 2
 
 
 def declared(root: Path) -> list[tuple[str, str]]:
-    """Пары «вопрос — путь значка» из набора витрины, в порядке набора."""
+    """Пары «вопрос — файл, который собирает этот сборщик», в порядке набора.
+
+    Вопрос, отвечающий зоной единого значка (#128), собирается здесь только
+    своим **источником** (`source`): картинку рисует действие каталога, а число
+    оно берёт из этого файла. Зона без источника (CI, выпуск) отсюда не
+    собирается вовсе — её цвет приходит от площадки.
+    """
     набор = json.loads((root / preflight.SHOWCASE_SET).read_text(encoding="utf-8"))[
         "questions"
     ]
     пары: list[tuple[str, str]] = []
     for вопрос in набор:
         значок = вопрос.get("badge")
-        if isinstance(значок, str) and значок:
-            пары.append((str(вопрос.get("id")), значок))
+        if not isinstance(значок, str) or not значок:
+            continue
+        if "zone" in вопрос:
+            источник = вопрос.get("source")
+            if isinstance(источник, str) and источник:
+                пары.append((str(вопрос.get("id")), источник))
+            continue
+        пары.append((str(вопрос.get("id")), значок))
     return пары
 
 
