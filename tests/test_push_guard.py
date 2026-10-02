@@ -27,6 +27,13 @@ import pytest
         "git push origin agent/работа:agent/работа",
         "git push origin HEAD:refs/heads/agent/работа",
         "git push --tags origin",
+        # Перенаправления — не аргументы толчка. Регрессию нашёл сам заслон на
+        # живой команде окна: `… 2>&1 | grep` резался соединителем `&`, и
+        # хвост `2>` судился как refspec.
+        "git push -q origin agent/работа 2>&1 | grep -v remote",
+        "git push origin agent/работа 2>/dev/null",
+        "git push origin agent/работа > /tmp/вывод.txt",
+        "git push origin agent/работа >>журнал 2>&1",
         "git status",
         "git fetch origin main",
         "echo git push origin main",
