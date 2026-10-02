@@ -122,3 +122,75 @@ def test_проверка_транспорта_видит_обход(tmp_path: P
 
     assert _импорты_urllib(обход) == [1]
     assert _импорты_urllib(чистый) == []
+
+
+# ── GraphQL: закрытый список (#165) ───────────────────────────────────────
+
+ВЗВЕСТИ = (
+    "mutation($id: ID!) { enablePullRequestAutoMerge("
+    "input: {pullRequestId: $id}) { clientMutationId } }"
+)
+
+
+def test_операция_вне_списка_отвергается_до_площадки(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Запрет стоит квоты только если срабатывает ДО запроса."""
+
+    def request(*_: object, **__: object) -> None:
+        raise AssertionError("к площадке ходить было нельзя")
+
+    monkeypatch.setattr(gh_rest, "request", request)
+    for запрос in (
+        "query { viewer { login } }",
+        "mutation { mergePullRequest(input: {}) { clientMutationId } }",
+        '{ repository(owner: "a", name: "b") { id } }',
+    ):
+        with pytest.raises(ValueError, match="вне закрытого списка"):
+            gh_rest.graphql(запрос)
+
+
+def test_операция_из_списка_уходит_на_graphql(monkeypatch: pytest.MonkeyPatch) -> None:
+    отправлено: dict[str, Any] = {}
+
+    def request(метод: str, путь: str, **kwargs: Any) -> dict[str, Any]:
+        отправлено.update(метод=метод, путь=путь, **kwargs)
+        return {"data": {"enablePullRequestAutoMerge": {"clientMutationId": None}}}
+
+    monkeypatch.setattr(gh_rest, "request", request)
+    данные = gh_rest.graphql(ВЗВЕСТИ, {"id": "PR_1"})
+
+    assert (отправлено["метод"], отправлено["путь"]) == ("POST", "/graphql")
+    assert отправлено["body"]["variables"] == {"id": "PR_1"}
+    assert "enablePullRequestAutoMerge" in данные
+
+
+def test_ошибка_graphql_с_кодом_200_это_отказ(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GraphQL отвечает 200 и кладёт отказ в `errors` — статус о нём молчит."""
+    monkeypatch.setattr(
+        gh_rest, "request", lambda *a, **k: {"errors": [{"message": "нельзя"}]}
+    )
+    with pytest.raises(gh_rest.GitHubError, match="нельзя"):
+        gh_rest.graphql(ВЗВЕСТИ, {"id": "PR_1"})
+
+
+def test_graphql_шлёт_только_транспорт() -> None:
+    """Обход закрытого списка — GraphQL мимо `gh_rest.graphql`.
+
+    Код: адрес `/graphql` вне транспорта. Прогоны: `gh api graphql` и прямой
+    адрес. `gh release` в `release.yml` — второй транспорт, и он назван в
+    ответе по правилу 001, но GraphQL не шлёт.
+    """
+    мимо = [
+        f"{путь.relative_to(КОРЕНЬ).as_posix()}"
+        for каталог in ПРЕДМЕТ
+        for путь in sorted((КОРЕНЬ / каталог).glob("*.py"))
+        if путь.name != "gh_rest.py" and "/graphql" in путь.read_text(encoding="utf-8")
+    ]
+    мимо += [
+        f".github/workflows/{путь.name}"
+        for путь in sorted((КОРЕНЬ / ".github" / "workflows").glob("*.yml"))
+        if "gh api graphql" in (текст := путь.read_text(encoding="utf-8"))
+        or "api.github.com/graphql" in текст
+    ]
+    assert not мимо, f"GraphQL мимо закрытого списка: {', '.join(мимо)}"

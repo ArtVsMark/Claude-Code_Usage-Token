@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -125,6 +126,46 @@ def request(
         raise GitHubError(
             method, path, 0, f"нет ответа за {REQUEST_TIMEOUT} с ({exc})"
         ) from exc
+
+
+#: GraphQL-операции, которые здесь разрешены. Закрытый список, и каждая — с
+#: причиной: GraphQL стоит ~300 points против 1 у REST и уже выжигал квоту у
+#: соседа, поэтому он допустим только там, где у REST операции физически нет
+#: (правило 001). Авто-мерж — именно такой случай: решение владельца 2 октября
+#: (#165), так же у конвейера механизмов (`ghrest.IDEMPOTENT`).
+ГРАФQL_ОПЕРАЦИИ = frozenset(
+    {"enablePullRequestAutoMerge", "disablePullRequestAutoMerge"}
+)
+
+_ОПЕРАЦИЯ_RE = re.compile(r"^\s*(?:mutation|query)\b[^{]*\{\s*(?P<имя>\w+)", re.DOTALL)
+
+
+def graphql(запрос: str, переменные: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Одна GraphQL-операция из закрытого списка — и только она.
+
+    Операция определяется первым полем запроса. Вне списка — отказ ДО обращения
+    к площадке: квота не тратится на то, что всё равно запрещено. Ошибки
+    GraphQL приходят с кодом 200 в поле `errors`, поэтому разбираются здесь, а
+    не по статусу.
+    """
+    совпало = _ОПЕРАЦИЯ_RE.match(запрос)
+    имя = совпало.group("имя") if совпало else "?"
+    if имя not in ГРАФQL_ОПЕРАЦИИ:
+        raise ValueError(
+            f"GraphQL-операция «{имя}» вне закрытого списка "
+            f"{sorted(ГРАФQL_ОПЕРАЦИИ)}: здесь всё по REST (правило 001, #165)"
+        )
+    ответ = request(
+        "POST", "/graphql", body={"query": запрос, "variables": переменные or {}}
+    )
+    if not isinstance(ответ, dict):
+        raise GitHubError("POST", "/graphql", 0, f"ответ не объект: {ответ!r}")
+    if ответ.get("errors"):
+        raise GitHubError(
+            "POST", "/graphql", 200, json.dumps(ответ["errors"], ensure_ascii=False)
+        )
+    данные = ответ.get("data")
+    return данные if isinstance(данные, dict) else {}
 
 
 def paged(path: str, *, params: dict[str, str | int] | None = None) -> list[Any]:
