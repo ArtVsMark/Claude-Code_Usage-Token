@@ -46,6 +46,17 @@ PER_PAGE = 100
 #: съедает квоту молча и до конца.
 MAX_PAGES = 20
 
+#: Срок одного запроса, в секундах. Без него `urlopen` ждёт ответа сколько
+#: угодно: зависший обмен держит прогон до `timeout-minutes` джоба, а локально —
+#: вечно. Гейт дедлайнов видит только `subprocess`, и сетевой вызов прошёл мимо
+#: (#151, находка аудита #139).
+#:
+#: Полминуты — не с потолка: это срок транспорта проекта механизмов
+#: (`packages/transport/ghrest.py`, `TIMEOUT = 30`), на который мы переезжаем
+#: (#158). REST площадки отвечает за доли секунды, а медленнее всего — ответ
+#: на сравнение веток, и у него запас в десятки раз.
+REQUEST_TIMEOUT = 30
+
 
 class GitHubError(RuntimeError):
     """Площадка ответила отказом. Текст называет код и тело ответа."""
@@ -100,13 +111,20 @@ def request(
 
     запрос = urllib.request.Request(url, data=данные, headers=заголовки, method=method)
     try:
-        with urllib.request.urlopen(запрос) as ответ:
+        with urllib.request.urlopen(запрос, timeout=REQUEST_TIMEOUT) as ответ:
             сырое = ответ.read().decode("utf-8")
             return json.loads(сырое) if сырое else None
     except urllib.error.HTTPError as exc:
         raise GitHubError(method, path, exc.code, exc.read().decode("utf-8")) from exc
     except urllib.error.URLError as exc:
         raise GitHubError(method, path, 0, str(exc.reason)) from exc
+    except TimeoutError as exc:
+        # Срок на соединении приходит `URLError`, а на ЧТЕНИИ — голым
+        # `TimeoutError`, мимо ветки выше. Без этой ветки срок превратил бы
+        # «площадка молчит» в трассировку вместо названного отказа.
+        raise GitHubError(
+            method, path, 0, f"нет ответа за {REQUEST_TIMEOUT} с ({exc})"
+        ) from exc
 
 
 def paged(path: str, *, params: dict[str, str | int] | None = None) -> list[Any]:
