@@ -15,7 +15,7 @@ dynamic = ["version"]
 description = "Измеряет расход лимитов Claude Code и выводит остаток по калиброванной шкале"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 authors = [{ name = "ArtVsMark" }]
 keywords = ["claude-code", "usage", "rate-limit", "metering"]
 classifiers = [
@@ -23,9 +23,7 @@ classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Natural Language :: Russian",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
 dependencies = []
@@ -71,7 +69,15 @@ packages = ["src/claude_code_usage"]
 [tool.ruff]
 line-length = 88
 src = ["src", "tests", "scripts"]
-target-version = "py311"
+target-version = "py314"
+
+# ХУКИ ОКНА — НЕ НА ПЛАНКЕ ПРОЕКТА. Их запускает системный `python3` той
+# машины, где открыто окно, а не окружение проекта: в облачном окне это 3.11
+# (замер 1 октября, #126). На py314 форматтер снимает скобки у
+# `except (A, B):` (PEP 758), и хук упал бы синтаксической ошибкой ещё до
+# первой строки — то есть сторож толчка выключился бы молча.
+[tool.ruff.per-file-target-version]
+".claude/hooks/*.py" = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
@@ -94,7 +100,7 @@ docstring-code-format = true
 
 # ── mypy ──────────────────────────────────────────────────────────────────
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 # Хук живёт в .claude/hooks, потому что там его ищет Claude Code, а не мы: он
 # объявлен в .claude/settings.json и вызывается им. Каталог поэтому назван и
 # здесь — иначе проверка типов и набор тестов его не видели бы, и заслон был бы
