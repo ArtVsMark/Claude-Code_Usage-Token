@@ -14,15 +14,24 @@
 
 ## Формат
 
-Один файл на запись, имя `changelog.d/<номер задачи>.<вид>.md`::
+Один файл на запись, имя `changelog.d/<что-изменилось>.<вид>.md`, номер задачи —
+последней строкой внутри::
 
-    changelog.d/10.added.md
+    changelog.d/pr-template-not-a-link.fixed.md
 
-Номер задачи — в **имени**, а не в тексте: так его можно сверить с телом PR, не
-разбирая прозу. Вид — из `KINDS`; он же задаёт раздел собранного `CHANGELOG.md`.
+        Гейт разметки PR больше не пропускает нетронутый шаблон.
 
-Содержимое — одна-две строки по-русски. `CHANGELOG.md` и release notes
-публикуются наружу, значит должны быть на языке проекта.
+        #151
+
+Схема — конвейера механизмов, на который проект переезжает (#158). Прежде номер
+задачи стоял в ИМЕНИ (`151.fixed.md`), и это склеивало разные изменения: все
+порции по одной задаче писали в один файл, за одну серию это дало три конфликта
+слияния подряд и запись из пяти несвязанных строк. Имя по смыслу не сталкивается
+никогда, а слаг из одних цифр отвергается — по нему не понять, что внутри.
+
+Вид — из `KINDS`; он же задаёт раздел собранного `CHANGELOG.md`. Содержимое —
+одна-три строки по-русски: `CHANGELOG.md` и release notes публикуются наружу,
+значит должны быть на языке проекта.
 
 ## Исключение для записей из одних идентификаторов
 
@@ -62,7 +71,13 @@ KINDS: dict[str, str] = {
     "changed": "Изменено",
     "fixed": "Исправлено",
     "removed": "Убрано",
+    "internal": "Внутреннее",
 }
+
+#: Вид `internal` — ответ «потребителю не нужно», и он обязан назвать причину
+#: (правило 154): молчание состоянием не является. Форма — та же, что у
+#: механизмов, первой строкой записи.
+INTERNAL_REASON = "> **Потребителю безразлично:**"
 
 #: Маркер записи, которой кириллица не нужна по природе. Явный, а не
 #: угадываемый: «`ruff` поднят до 0.6» — законная запись без единой русской
@@ -81,7 +96,8 @@ BEHAVIOUR_TYPES = frozenset({"bug", "enhancement"})
 EXIT_FAILED = 1
 
 _CYRILLIC = re.compile("[Ѐ-ӿ]")
-_NAME_RE = re.compile(r"^(?P<issue>\d+)\.(?P<kind>[a-z]+)\.md$")
+_NAME_RE = re.compile(r"^(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.(?P<kind>[a-z]+)\.md$")
+_ISSUE_RE = re.compile(r"^#(?P<issue>\d+)$")
 
 
 @dataclass(frozen=True)
@@ -89,6 +105,7 @@ class Fragment:
     """Одна запись changelog."""
 
     path: Path
+    slug: str
     issue: int
     kind: str
     text: str
@@ -99,8 +116,14 @@ class Fragment:
 
     @property
     def body(self) -> str:
-        """Текст без служебного маркера."""
-        return self.text.replace(IDENTIFIERS_ONLY, "").strip()
+        """Текст без служебного маркера и без строки с номером задачи."""
+        строки = self.text.replace(IDENTIFIERS_ONLY, "").strip().splitlines()
+        if строки and _ISSUE_RE.match(строки[-1].strip()):
+            строки = строки[:-1]
+        текст = "\n".join(строки).strip()
+        if self.kind == "internal":
+            текст = текст.removeprefix(">").strip()
+        return текст
 
 
 def parse(path: Path) -> Fragment | str:
@@ -110,7 +133,16 @@ def parse(path: Path) -> Fragment | str:
         виды = ", ".join(sorted(KINDS))
         return (
             f"{FRAGMENTS}/{path.name}: имя не по формату "
-            f"«<номер задачи>.<вид>.md», вид — один из: {виды}"
+            f"«<что-изменилось>.<вид>.md» (латиница, цифры, дефис), вид — один "
+            f"из: {виды}"
+        )
+    слаг = совпадение.group("slug")
+    if слаг.isdigit():
+        return (
+            f"{FRAGMENTS}/{path.name}: имя из одного номера. Имя называет, ЧТО "
+            "изменилось, а номер задачи пишется последней строкой записи: "
+            "номер в имени склеивает разные изменения одной задачи в один файл "
+            "(#158)"
         )
     вид = совпадение.group("kind")
     if вид not in KINDS:
@@ -125,8 +157,21 @@ def parse(path: Path) -> Fragment | str:
         return f"{FRAGMENTS}/{path.name}: не прочитан — {exc}"
     if not текст.strip():
         return f"{FRAGMENTS}/{path.name}: пустая запись — то же, что её отсутствие"
+    последняя = текст.strip().splitlines()[-1].strip()
+    номер = _ISSUE_RE.match(последняя)
+    if номер is None:
+        return (
+            f"{FRAGMENTS}/{path.name}: последней строкой нет номера задачи "
+            "(«#N») — без него запись не сверить с изменением, которое её привезло"
+        )
+    if вид == "internal" and not текст.strip().startswith(INTERNAL_REASON):
+        return (
+            f"{FRAGMENTS}/{path.name}: вид internal обязан первой строкой назвать "
+            f"причину — «{INTERNAL_REASON} <почему это не касается того, кто "
+            "ставит пакет>». Без неё «не нужно» неотличимо от «забыли» (154)"
+        )
     return Fragment(
-        path=path, issue=int(совпадение.group("issue")), kind=вид, text=текст
+        path=path, slug=слаг, issue=int(номер.group("issue")), kind=вид, text=текст
     )
 
 
@@ -168,12 +213,14 @@ def language_warnings(фрагменты: Sequence[Fragment]) -> list[str]:
 def render(фрагменты: Sequence[Fragment], version: str) -> str:
     """Собрать раздел `CHANGELOG.md` из фрагментов.
 
-    Порядок внутри раздела — по номеру задачи, а не по имени файла: имя это
-    номер и вид, и сортировка строкой поставила бы #10 перед #2.
+    Порядок внутри раздела — по номеру задачи, затем по имени: номер берётся
+    числом, а не строкой, иначе #10 встал бы перед #2.
     """
     строки = [f"## {version}", ""]
     for вид, заголовок in KINDS.items():
-        свои = sorted((ф for ф in фрагменты if ф.kind == вид), key=lambda ф: ф.issue)
+        свои = sorted(
+            (ф for ф in фрагменты if ф.kind == вид), key=lambda ф: (ф.issue, ф.slug)
+        )
         if not свои:
             continue
         строки += [f"### {заголовок}", ""]
