@@ -2,21 +2,19 @@
   "schema": "1.2",
   "schema_of": "договор facts.json витрины профиля ArtVsMark/ArtVsMark (.rules/facts.schema.json)",
   "repo": "ArtVsMark/Claude-Code_Usage-Token",
-  "generated_at": "2026-10-01T10:21:36+00:00",
-  "commit": "86a54cd571346a75bf09e7cb058ddec381e53157",
+  "generated_at": "2026-10-02T08:19:54+00:00",
+  "commit": "9dced3b825a78f9cb46f298af9194c63bc64f8c4",
   "ci": {
     "workflow": "ci.yml"
   },
   "version": "0.2.0",
   "tests": {
-    "functions": 567,
+    "functions": 568,
     "modules": 34
   },
   "python": {
     "supported": [
-      "3.11",
-      "3.12",
-      "3.13"
+      "3.14"
     ],
     "os": [
       "ubuntu-latest",
@@ -25,18 +23,12 @@
     ]
   },
   "checks_per_pr": {
-    "count": 12,
+    "count": 6,
     "names": [
       "PR check",
-      "гейты · macos-latest · python 3.11",
-      "гейты · macos-latest · python 3.12",
-      "гейты · macos-latest · python 3.13",
-      "гейты · ubuntu-latest · python 3.11",
-      "гейты · ubuntu-latest · python 3.12",
-      "гейты · ubuntu-latest · python 3.13",
-      "гейты · windows-latest · python 3.11",
-      "гейты · windows-latest · python 3.12",
-      "гейты · windows-latest · python 3.13",
+      "гейты · macos-latest · python 3.14",
+      "гейты · ubuntu-latest · python 3.14",
+      "гейты · windows-latest · python 3.14",
       "запись есть и она на языке проекта",
       "зона, тип, связь с задачей и имя ветки"
     ]
