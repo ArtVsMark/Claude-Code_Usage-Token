@@ -267,6 +267,18 @@ def compare_showcases(root: Path) -> list[str]:
 #: своей правке.
 SHOWCASE_SET = ".rules/showcase.json"
 
+#: Прогон, который рисует единый значок (#128). Зона единого значка не
+#: считается этим гейтом: её рисует действие каталога из ответа площадки о
+#: прогонах и из файлов-источников. Правило вывода зоны поэтому — ШАГ этого
+#: прогона, и гейт требует, чтобы шаг существовал и писал ровно этот файл.
+BADGES_WORKFLOW = ".github/workflows/badges.yml"
+
+#: Действие каталога, рисующее единый значок. Закрепление тегом проверяется не
+#: здесь: здесь важно, что рисует именно оно, а не копия в проекте (095).
+COMPOSITE_ACTION = (
+    "ArtVsMark/Engineering-Incidents-Playbook/.github/actions/python-badge@"
+)
+
 #: Причина отсутствия короче этого — отписка, а не причина. Двадцать символов
 #: не мера качества: это нижняя граница, ниже которой объяснения точно нет.
 ABSENT_MIN = 20
@@ -444,6 +456,10 @@ def _check_badge(
                 "ответ в пустоту"
             )
 
+    if "zone" in question:
+        findings.extend(_check_zone(qid, badge, question, root))
+        return findings
+
     # ПРАВИЛО ВЫВОДА ТРЕБУЕТСЯ НЕЗАВИСИМО ОТ ВЕТКИ, и проверяется раньше неё.
     # Значок, который некому посчитать, на отдельной ветке окажется пустым или
     # застывшим — а витрина будет отвечать им как живым числом. Пока значки
@@ -499,6 +515,61 @@ def _check_badge(
             f"из дерева выходит {expected}"
         )
 
+    return findings
+
+
+def _check_zone(
+    qid: str, badge: str, question: dict[str, object], root: Path
+) -> list[str]:
+    """Проверить ответ зоной единого значка (#128, набор витрины 1.1).
+
+    Картинку рисует действие каталога, и сверить её с деревом нечем — цвета
+    приходят от площадки. Проверяемо другое, и оно проверяется:
+
+    - зона названа — иначе непонятно, какая часть картинки отвечает;
+    - шаг, рисующий значок, в прогоне значков есть и пишет ровно этот файл —
+      иначе витрина ссылается на картинку, которую никто не рисует;
+    - у зоны с источником (`source`) — правило вывода источника есть. Источник
+      собирает `scripts/badges.py`, а действие из него читает число: без
+      правила зона стала бы серой «—» при живом числе в дереве.
+    """
+    findings: list[str] = []
+    зона = question.get("zone")
+    if not isinstance(зона, str) or not зона.strip():
+        findings.append(f"{qid}: зона значка {badge} не названа — {зона!r}")
+
+    try:
+        прогон = (root / BADGES_WORKFLOW).read_text(encoding="utf-8")
+    except OSError as exc:
+        findings.append(f"{qid}: прогон значков не прочитан — {exc}")
+        return findings
+    if COMPOSITE_ACTION not in прогон:
+        findings.append(
+            f"{qid}: значок {badge} объявлен, а шага, который его рисует "
+            f"({COMPOSITE_ACTION}…), в {BADGES_WORKFLOW} нет"
+        )
+    elif re.search(rf"^\s*out:\s*{re.escape(badge)}\s*$", прогон, re.MULTILINE) is None:
+        findings.append(
+            f"{qid}: шаг единого значка в {BADGES_WORKFLOW} пишет не {badge} — "
+            "витрина ссылается на файл, которого он не создаёт"
+        )
+
+    источник = question.get("source")
+    if источник is None:
+        return findings
+    if not isinstance(источник, str) or not источник.strip():
+        findings.append(f"{qid}: источник зоны назван не путём — {источник!r}")
+        return findings
+    try:
+        ожидается = expected_badge(qid, root)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        findings.append(f"{qid}: источник {источник} не с чем сверить — {exc}")
+        return findings
+    if ожидается is None:
+        findings.append(
+            f"{qid}: у зоны есть источник {источник}, а правила его вывода в "
+            "гейте нет — собрать его нечем, и зона была бы серой при живом числе"
+        )
     return findings
 
 
