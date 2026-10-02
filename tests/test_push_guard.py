@@ -23,8 +23,17 @@ import pytest
         "git push origin",
         "git push -u origin agent/работа",
         "git push --force-with-lease origin agent/работа",
-        "git push origin HEAD:main",
-        "git push origin HEAD:agent/другая",
+        "git push origin HEAD:agent/работа",
+        "git push origin agent/работа:agent/работа",
+        "git push origin HEAD:refs/heads/agent/работа",
+        "git push --tags origin",
+        # Перенаправления — не аргументы толчка. Регрессию нашёл сам заслон на
+        # живой команде окна: `… 2>&1 | grep` резался соединителем `&`, и
+        # хвост `2>` судился как refspec.
+        "git push -q origin agent/работа 2>&1 | grep -v remote",
+        "git push origin agent/работа 2>/dev/null",
+        "git push origin agent/работа > /tmp/вывод.txt",
+        "git push origin agent/работа >>журнал 2>&1",
         "git status",
         "git fetch origin main",
         "echo git push origin main",
@@ -45,10 +54,31 @@ def test_законное_пропускается(команда: str) -> None:
         ("git push origin agent/чужая:main", "agent/чужая"),
         ("cd /tmp && git push origin main", "main"),
         ("git fetch origin && git push origin main", "main"),
+        # Цель — правая часть refspec (#155): прежде источник `HEAD` объявлял
+        # толчок законным, куда бы он ни шёл, и `--force origin HEAD:main`
+        # проходил с кодом 0 — `main` спасал только ruleset площадки (#151).
+        ("git push origin HEAD:main", "main"),
+        ("git push --force origin HEAD:main", "main"),
+        ("git push origin HEAD:agent/другая", "agent/другая"),
+        ("git push origin HEAD:refs/heads/agent/другая", "agent/другая"),
+        ("git push origin :agent/другая", "agent/другая"),
+        ("git push origin --delete agent/другая", "agent/другая"),
+        # Толчок всех веток разом уносит и чужие.
+        ("git push --all origin", "все ветки"),
+        ("git push --mirror origin", "все ветки"),
     ],
 )
 def test_чужая_ветка_отвергается(команда: str, ждём: str) -> None:
     assert push_guard.чужая_ветка(команда, ГОЛОВА) == ждём
+
+
+@pytest.mark.parametrize(
+    "команда",
+    ["git push", "git push origin", "git push origin main", "git push -u origin HEAD"],
+)
+def test_с_головы_main_не_толкают_никогда(команда: str) -> None:
+    """`main` — общая ветка: окно в неё не толкает ни под каким именем."""
+    assert push_guard.чужая_ветка(команда, "main") == "main"
 
 
 def test_без_головы_не_судим() -> None:
