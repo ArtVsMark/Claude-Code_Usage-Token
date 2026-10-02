@@ -22,7 +22,6 @@ import json
 import re
 import subprocess
 import sys
-import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -335,33 +334,6 @@ class ShowcaseContract:
     questions: int
     live: int
     named: int
-
-
-#: Строка объявления версии — та же форма, которую читает сборка.
-_VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILINE)
-
-
-def project_version(root: Path) -> str:
-    """Версия проекта из единственного источника, названного в ``pyproject.toml``.
-
-    Раньше бралась прямо из ``[project] version``. После #12 версия объявлена
-    там динамической, и значок стало не с чем сверять — гейт заметил это тем же
-    прогоном, что и всё остальное. Ровно та работа, ради которой он заведён.
-
-    Путь к источнику **не задаётся здесь константой**: он читается из
-    ``[tool.hatch.version] path``. Иначе одно и то же знание — «где живёт
-    версия» — лежало бы в двух местах, и переезд источника разошёлся бы с
-    гейтом молча.
-    """
-    with (root / "pyproject.toml").open("rb") as fh:
-        путь = tomllib.load(fh)["tool"]["hatch"]["version"]["path"]
-    if not isinstance(путь, str):
-        raise TypeError(f"путь к версии в pyproject.toml не строка: {путь!r}")
-
-    совпадение = _VERSION_RE.search((root / путь).read_text(encoding="utf-8"))
-    if совпадение is None:
-        raise ValueError(f'в {путь} нет строки __version__ = "…"')
-    return совпадение.group(1)
 
 
 class ЗамераНет:

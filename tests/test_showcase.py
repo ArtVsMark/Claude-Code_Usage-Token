@@ -275,38 +275,6 @@ def test_живой_контракт_проекта_сходится() -> None:
     )
 
 
-def test_путь_к_версии_берётся_из_pyproject(tmp_path: Path) -> None:
-    """Знание «где живёт версия» лежит в одном месте, а не в двух.
-
-    Раньше гейт читал версию прямо из `[project] version`. Когда версия стала
-    динамической (#12), значок стало не с чем сверять — и гейт сказал об этом
-    тем же прогоном. Константа с путём внутри гейта повторила бы ту же
-    ошибку молчаливо: переезд источника разошёлся бы с ней незаметно.
-    """
-    _файл(
-        tmp_path,
-        "pyproject.toml",
-        '[project]\ndynamic = ["version"]\n\n'
-        '[tool.hatch.version]\npath = "где/угодно.py"\n',
-    )
-    _файл(tmp_path, "где/угодно.py", '__version__ = "4.5.6"\n')
-
-    assert preflight.project_version(tmp_path) == "4.5.6"
-
-
-def test_источник_без_версии_роняет_гейт(tmp_path: Path) -> None:
-    """Проверка, не нашедшая предмета, обязана упасть, а не выдумать значение."""
-    _файл(
-        tmp_path,
-        "pyproject.toml",
-        '[project]\ndynamic = ["version"]\n\n[tool.hatch.version]\npath = "пусто.py"\n',
-    )
-    _файл(tmp_path, "пусто.py", "# версии тут нет\n")
-
-    with pytest.raises(ValueError, match="__version__"):
-        preflight.project_version(tmp_path)
-
-
 def test_значка_версии_в_дереве_нет() -> None:
     """Значок уехал на ветку `badges`, и в общей ветке его быть не должно.
 
