@@ -23,6 +23,7 @@ import pytest
 import badges
 import facts
 import preflight
+from conftest import счётная_история
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 
@@ -221,6 +222,7 @@ def _источник_версии(каталог: Path, версия: str = "1.
         '[tool.hatch.version]\npath = "src/pkg/__init__.py"\n',
     )
     _файл(каталог, "src/pkg/__init__.py", f'__version__ = "{версия}"\n')
+    счётная_история(каталог, версия)
 
 
 def _со_значком(

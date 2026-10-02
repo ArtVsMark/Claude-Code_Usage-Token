@@ -17,6 +17,7 @@ import pytest
 import badges
 import facts
 import preflight
+from conftest import счётная_история
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 
@@ -41,6 +42,7 @@ def _источник_версии(каталог: Path, версия: str = "4.
     (каталог / "src" / "pkg" / "__init__.py").write_text(
         f'__version__ = "{версия}"\n', encoding="utf-8"
     )
+    счётная_история(каталог, версия)
 
 
 ЗНАЧОК: dict[str, Any] = {
