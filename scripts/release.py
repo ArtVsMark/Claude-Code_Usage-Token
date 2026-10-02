@@ -110,15 +110,27 @@ def metadata_version(path: Path) -> str | None:
     return None
 
 
+def wheel_unreadable(path: Path) -> str | None:
+    """Почему колесо нельзя проверить — или `None`, если можно.
+
+    Это третий исход, а не находка: «колеса нет» говорит о сборке, а не о
+    выпуске, и смешать их в коде 1 значило бы назвать непроверенное плохим.
+    """
+    if not path.is_file():
+        return f"{path}: колеса нет — проверять нечего"
+    try:
+        wheel_names(path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        return f"{path}: колесо не читается — {exc}"
+    return None
+
+
 def check_wheel(path: Path, package_version: str) -> list[str]:
     """Проверить, что уехало в колесе, а не что лежало в репозитории."""
-    if not path.is_file():
-        return [f"{path}: колеса нет — проверять нечего"]
-
-    try:
-        имена = wheel_names(path)
-    except (OSError, zipfile.BadZipFile) as exc:
-        return [f"{path}: колесо не читается — {exc}"]
+    причина = wheel_unreadable(path)
+    if причина is not None:
+        return [причина]
+    имена = wheel_names(path)
 
     problems: list[str] = []
 
@@ -161,6 +173,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     парсер.add_argument("--version", required=True, help="версия пакета")
     парсер.add_argument("--wheel", type=Path, help="собранное колесо")
     аргументы = парсер.parse_args(list(argv) if argv is not None else None)
+
+    if аргументы.wheel is not None:
+        причина = wheel_unreadable(аргументы.wheel)
+        if причина is not None:
+            # `EXIT_BROKEN` был объявлен и ни разу не возвращён (#151).
+            print(f"::error::{причина}. Выпуск не проверен", file=sys.stderr)
+            return EXIT_BROKEN
 
     problems = check_version(аргументы.tag, аргументы.version)
     if аргументы.wheel is not None:
