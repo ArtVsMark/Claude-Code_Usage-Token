@@ -22,7 +22,6 @@ import json
 import re
 import subprocess
 import sys
-import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -337,33 +336,6 @@ class ShowcaseContract:
     named: int
 
 
-#: Строка объявления версии — та же форма, которую читает сборка.
-_VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILINE)
-
-
-def project_version(root: Path) -> str:
-    """Версия проекта из единственного источника, названного в ``pyproject.toml``.
-
-    Раньше бралась прямо из ``[project] version``. После #12 версия объявлена
-    там динамической, и значок стало не с чем сверять — гейт заметил это тем же
-    прогоном, что и всё остальное. Ровно та работа, ради которой он заведён.
-
-    Путь к источнику **не задаётся здесь константой**: он читается из
-    ``[tool.hatch.version] path``. Иначе одно и то же знание — «где живёт
-    версия» — лежало бы в двух местах, и переезд источника разошёлся бы с
-    гейтом молча.
-    """
-    with (root / "pyproject.toml").open("rb") as fh:
-        путь = tomllib.load(fh)["tool"]["hatch"]["version"]["path"]
-    if not isinstance(путь, str):
-        raise TypeError(f"путь к версии в pyproject.toml не строка: {путь!r}")
-
-    совпадение = _VERSION_RE.search((root / путь).read_text(encoding="utf-8"))
-    if совпадение is None:
-        raise ValueError(f'в {путь} нет строки __version__ = "…"')
-    return совпадение.group(1)
-
-
 class ЗамераНет:
     """Правило вывода ЕСТЬ, а замера под ним нет — третий исход, не второй.
 
@@ -418,10 +390,22 @@ def expected_badge(qid: str, root: Path) -> dict[str, object] | ЗамераНе
     ``ЗамераНет`` — третий исход: правило есть, а числа под ним в дереве нет.
     """
     if qid == "version":
+        # СЧЁТНАЯ ВЕРСИЯ, КАК У СЕМЬИ: `X.Y.N` — N принятых изменений после
+        # тега `vX.Y.0`. Так значок `version` считают каталог и грейдер, и так
+        # же здесь печатает её проверка версии. Прежде значок показывал
+        # выпущенный литерал `__version__` — он двигается только при выпуске,
+        # и витрина между выпусками стояла на месте, отвечая не на свой вопрос
+        # «какая версия у текущей головы». Литерал остаётся колесу пакета.
+        #
+        # Тега не видно (мелкий клон, не git) — третий исход, а не «0.0.N»:
+        # правдоподобная цифра здесь хуже молчания, потому что выглядит свежей.
+        счёт = version.counted(root)
+        if счёт is None:
+            return ЗамераНет()
         return {
             "schemaVersion": 1,
             "label": "version",
-            "message": project_version(root),
+            "message": счёт[1],
             "color": BADGE_COLOR,
         }
     if qid == "coverage":
