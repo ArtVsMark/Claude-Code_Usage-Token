@@ -2,7 +2,7 @@
   "schema": "1.3",
   "schema_of": "договор facts.json витрины профиля ArtVsMark/ArtVsMark (.rules/facts.schema.json)",
   "repo": "ArtVsMark/Claude-Code_Usage-Token",
-  "generated_at": "2026-10-02T09:35:06+00:00",
+  "generated_at": "2026-10-02T09:36:10+00:00",
   "commit": "29f1232db7eb0351f165637916424a5558ba20f5",
   "ci": {
     "workflow": "ci.yml"
