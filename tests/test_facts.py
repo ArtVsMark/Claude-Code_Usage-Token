@@ -26,8 +26,10 @@ import facts
 РЕПОЗИТОРИЙ = "ArtVsMark/Claude-Code_Usage-Token"
 КОММИТ = "0123456789abcdef0123456789abcdef01234567"
 
-#: Настоящий `выпуск`, снятый до подмены: его проверяют отдельно, на настоящем git.
+#: Настоящие `выпуск` и `версия`, снятые до подмены: их проверяют отдельно, на
+#: настоящем git.
 _ВЫПУСК = facts.выпуск
+_ВЕРСИЯ = facts.версия
 
 
 @pytest.fixture(autouse=True)
@@ -36,9 +38,11 @@ def _история_не_нужна(monkeypatch: pytest.MonkeyPatch) -> None:
 
     `ci.yml` клонирует мелко, облачное окно тоже: настоящий `выпуск` там честно
     отказывает. Он проверяется своими тестами ниже, на собранном репозитории;
-    остальным нужен только ответ — «выпусков нет».
+    остальным нужен только ответ — «выпусков нет». То же с версией: она
+    счётная и считается от тега.
     """
     monkeypatch.setattr(facts, "выпуск", lambda root: None)
+    monkeypatch.setattr(facts, "версия", lambda root: None)
     monkeypatch.setenv("GITHUB_SHA", КОММИТ)
 
 
@@ -194,12 +198,11 @@ def test_по_каждому_показателю_значение_или_при
         assert (ключ in ф) != (ключ in ф.get("none", {})), ключ
 
 
-def test_версия_та_же_что_у_значка() -> None:
-    """Значок и факты называют одну версию одним числом."""
-    import preflight
-
+def test_нет_версии_это_причина() -> None:
+    """Тега нет при полной истории — причина в `none.version`, а не «0.0.N»."""
     ф = facts.build(КОРЕНЬ, repo=РЕПОЗИТОРИЙ)
-    assert ф["version"] == preflight.project_version(КОРЕНЬ)
+    assert "version" not in ф
+    assert "тега" in ф["none"]["version"]
 
 
 def test_короткий_коммит_это_отказ() -> None:
@@ -323,6 +326,54 @@ def test_мелкий_клон_это_отказ_а_не_выпусков_нет
 def test_не_git_это_отказ(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="не git"):
         _ВЫПУСК(tmp_path)
+
+
+# ── версия: счётная, как у семьи ─────────────────────────────────────────────
+
+
+def _с_литералом(репозиторий: Path, литерал: str) -> None:
+    import version
+
+    путь = репозиторий / version.VERSION_PATH
+    путь.parent.mkdir(parents=True, exist_ok=True)
+    путь.write_text(f'__version__ = "{литерал}"\n', encoding="utf-8")
+    _git(репозиторий, "add", ".")
+    _git(репозиторий, "commit", "-q", "-m", "литерал")
+
+
+def test_версия_считается_от_тега(репозиторий: Path) -> None:
+    """`0.2.2` — два принятых изменения после `v0.2.0`, а не литерал `0.2.0`."""
+    _с_литералом(репозиторий, "0.2.0")
+    _git(репозиторий, "tag", "v0.2.0")
+    for номер in (5, 6):
+        (репозиторий / "файл").write_text(str(номер), encoding="utf-8")
+        _git(репозиторий, "commit", "-q", "-am", f"feat: изменение (#{номер})")
+
+    assert _ВЕРСИЯ(репозиторий) == "0.2.2"
+
+
+def test_версия_та_же_что_у_значка(репозиторий: Path) -> None:
+    """Значок и факты называют одну версию одним числом (022)."""
+    import preflight
+
+    _с_литералом(репозиторий, "0.2.0")
+    _git(репозиторий, "tag", "v0.2.0")
+    (репозиторий / "файл").write_text("z", encoding="utf-8")
+    _git(репозиторий, "commit", "-q", "-am", "fix: правка (#7)")
+
+    значок = preflight.expected_badge("version", репозиторий)
+    assert isinstance(значок, dict)
+    assert _ВЕРСИЯ(репозиторий) == значок["message"] == "0.2.1"
+
+
+def test_версии_нет_без_тега_при_полной_истории(репозиторий: Path) -> None:
+    _с_литералом(репозиторий, "0.1.0")
+    assert _ВЕРСИЯ(репозиторий) is None
+
+
+def test_версия_вне_git_это_отказ(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="не git"):
+        _ВЕРСИЯ(tmp_path)
 
 
 def test_main_пишет_файл_по_адресу_контракта(tmp_path: Path) -> None:
