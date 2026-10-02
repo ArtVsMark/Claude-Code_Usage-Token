@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
 from typing import Any
 
 #: Форма записи, снятая с ЖИВОГО транскрипта. Лишние поля оставлены нарочно:
@@ -50,3 +52,40 @@ from typing import Any
         },
     },
 }
+
+
+def счётная_история(каталог: Path, версия: str) -> None:
+    """Настоящий git, в котором счётная версия выходит ровно ``версия``.
+
+    Версия здесь счётная, как у семьи: `X.Y.N` — N принятых изменений после
+    тега `vX.Y.0`. Подделать её без git нечем, а подделка мимо git проверяла
+    бы замысел, а не счёт. Поэтому: литерал `X.Y.0` в источнике выпущенной
+    версии, тег `vX.Y.0` и N коммитов с номером изменения в теме.
+
+    Нужна и значку (`tests/test_showcase.py`), и сборщику
+    (`tests/test_badges.py`) — отсюда место.
+    """
+    import version
+
+    major, minor, patch = версия.split(".")
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(каталог), *args],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+
+    if not (каталог / ".git").exists():
+        git("init", "-q", "-b", "main")
+        git("config", "user.email", "t@e.st")
+        git("config", "user.name", "Тест")
+    литерал = каталог / version.VERSION_PATH
+    литерал.parent.mkdir(parents=True, exist_ok=True)
+    литерал.write_text(f'__version__ = "{major}.{minor}.0"\n', encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "--allow-empty", "-m", "выпуск")
+    git("tag", f"v{major}.{minor}.0")
+    for номер in range(1, int(patch) + 1):
+        git("commit", "-q", "--allow-empty", "-m", f"feat: изменение (#{номер})")
