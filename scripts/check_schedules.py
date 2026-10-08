@@ -36,12 +36,12 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+import workflow_on
 from utf8_output import force_utf8_output
 
 EXIT_FAILED = 1
@@ -54,8 +54,6 @@ EXIT_BROKEN = 2
 СХЕМА = "1.0"
 
 WORKFLOWS = Path(".github") / "workflows"
-
-_РАСПИСАНИЕ = re.compile(r"^\s*schedule:\s*$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -134,7 +132,9 @@ def _расписания_в_дереве(корень: Path) -> set[str]:
         (WORKFLOWS / файл.name).as_posix()
         for файл in sorted(каталог.iterdir())
         if файл.suffix in {".yml", ".yaml"}
-        and _РАСПИСАНИЕ.search(файл.read_text(encoding="utf-8")) is not None
+        # Разбор `on:` общий (214): прежняя регулярка находила `schedule:` на
+        # любом отступе, в том числе вне блока событий.
+        and "schedule" in workflow_on.события(файл.read_text(encoding="utf-8"))
     }
 
 

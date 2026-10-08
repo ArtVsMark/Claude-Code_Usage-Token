@@ -50,6 +50,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+import workflow_on
 from utf8_output import force_utf8_output
 
 EXIT_FAILED = 1
@@ -65,7 +66,6 @@ _ВЕРХНИЙ = re.compile(r"^\S")
 
 _GROUP = re.compile(r"^\s+group\s*:\s*(?P<значение>\S.*?)\s*$")
 _CANCEL = re.compile(r"^\s+cancel-in-progress\s*:\s*(?P<значение>\S.*?)\s*$")
-_PR_EVENT = re.compile(r"^\s+pull_request(?:_target)?\s*:")
 
 
 @dataclass(frozen=True)
@@ -106,17 +106,13 @@ def _тело(строки: Sequence[str], ключ: str) -> list[tuple[int, str
     return тело
 
 
+#: События, у которых гонка групп одна и та же: оба несут голову PR.
+СОБЫТИЯ_PR = frozenset({"pull_request", "pull_request_target"})
+
+
 def listens_to_pr(text: str) -> bool:
-    """Слушает ли workflow события pull request."""
-    строки = text.splitlines()
-    for _, строка in _тело(строки, "on"):
-        if _PR_EVENT.match(строка):
-            return True
-    # Однострочная форма: `on: [pull_request]` или `on: pull_request`.
-    for строка in строки:
-        if re.match(r"^(?:on|\"on\"|'on')\s*:\s*\S", строка):
-            return "pull_request" in строка
-    return False
+    """Слушает ли workflow события pull request — разбор общий (214)."""
+    return bool(СОБЫТИЯ_PR & workflow_on.события(text))
 
 
 def check_text(text: str, path: str) -> list[Finding]:

@@ -16,6 +16,7 @@ import pytest
 
 import gh_rest
 import schedule_alarm
+import workflow_on
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 
@@ -203,21 +204,6 @@ def test_отказ_площадки_краснеет_отдельным_код�
 # ── связь сторожа со сторожимыми ──────────────────────────────────────────
 
 
-def _тело_блока(текст: str, ключ: str) -> list[str]:
-    строки = текст.splitlines()
-    начало = next(
-        (н for н, с in enumerate(строки) if re.match(rf"^{ключ}\s*:", с)), None
-    )
-    if начало is None:
-        return []
-    тело = []
-    for строка in строки[начало + 1 :]:
-        if строка.strip() and not строка.startswith((" ", "\t")):
-            break
-        тело.append(строка)
-    return тело
-
-
 def _наблюдаемые(сторож: str) -> set[str]:
     """Имена из блока `workflows:` сторожа — и только из него.
 
@@ -256,10 +242,8 @@ def test_каждый_прогон_по_расписанию_под_присмо
     по_расписанию: set[str] = set()
     for путь in sorted(WORKFLOWS.glob("*.yml")):
         текст = путь.read_text(encoding="utf-8")
-        if not any(
-            строка.strip().startswith("schedule:")
-            for строка in _тело_блока(текст, "on")
-        ):
+        # Разбор `on:` — общий для дерева (214), а не свой у теста.
+        if "schedule" not in workflow_on.события(текст):
             continue
         имя = re.search(r"^name:\s*(?P<имя>\S.*?)\s*$", текст, re.MULTILINE)
         assert имя is not None, f"{путь.name}: у прогона нет имени"

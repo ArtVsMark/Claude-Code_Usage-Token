@@ -295,9 +295,26 @@ def changed_files(argv: Sequence[str]) -> list[str]:
     return [строка.strip() for строка in argv if строка.strip()]
 
 
-def requires_entry(labels: Sequence[str]) -> bool:
-    """Нужна ли запись этому PR — по типу изменения."""
+def requires_entry(
+    labels: Sequence[str], *, draft: bool = False, fork: bool = False
+) -> bool:
+    """Нужна ли запись этому PR — единственный ответ на этот вопрос (214).
+
+    По типу изменения: поведение меняют `bug` и `enhancement`. Черновик и PR
+    из форка проверяются мягко — по той же границе, что у разметки: запись
+    доводят к готовности, а внешний участник наших правил не знает.
+
+    Прежде прогон решал это сам шагом оболочки, а функцию звали только тесты:
+    два ответа на один вопрос, и проверялся не тот, что работал.
+    """
+    if draft or fork:
+        return False
     return bool(BEHAVIOUR_TYPES & set(labels))
+
+
+def _да(значение: str) -> bool:
+    """Логическое из полезной нагрузки площадки: она отдаёт `true`/`false`."""
+    return значение.strip().lower() == "true"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -320,6 +337,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         help="изменённые файлы (вывод git diff --name-only)",
     )
+    парсер.add_argument(
+        "--labels",
+        default=None,
+        help="метки PR через пробел: запись обязательна по типу изменения",
+    )
+    парсер.add_argument("--draft", default="false", help="черновик ли PR (true/false)")
+    парсер.add_argument("--fork", default="false", help="из форка ли PR (true/false)")
     парсер.add_argument("--version", default="Не выпущено", help="заголовок раздела")
     парсер.add_argument(
         "--render", action="store_true", help="напечатать собранный раздел"
@@ -354,7 +378,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     фрагменты, претензии = collect(ROOT)
     замечания = language_warnings(фрагменты)
 
-    if аргументы.require_entry:
+    обязательна = аргументы.require_entry
+    if аргументы.labels is not None:
+        черновик, форк = _да(аргументы.draft), _да(аргументы.fork)
+        обязательна = requires_entry(
+            аргументы.labels.split(), draft=черновик, fork=форк
+        )
+        if черновик or форк:
+            print(
+                "::notice::черновик или форк — запись не требуется, "
+                "проверяется только язык"
+            )
+        ответ = "да" if обязательна else "нет"
+        print(f"запись обязательна: {ответ} (метки: {аргументы.labels})")
+
+    if обязательна:
         новые = [
             путь
             for путь in changed_files(аргументы.changed)

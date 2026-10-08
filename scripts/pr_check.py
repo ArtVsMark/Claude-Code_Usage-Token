@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import argparse
 import pathlib
-import re
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -56,6 +55,7 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import gh_rest
+import workflow_on
 from utf8_output import force_utf8_output
 
 #: Имя обязательной проверки. Совпадает с контекстом в ruleset **дословно** и
@@ -80,14 +80,6 @@ DEFAULT_INTERVAL = 15.0
 #: намеренно: результата нет, а красное — безопасная сторона.
 GREEN = frozenset({"success", "neutral", "skipped"})
 
-#: Строка `on:` в начале файла. Кавычки допускаются: в YAML 1.1 голое `on` —
-#: булево, и часть проектов пишет ключ в кавычках именно поэтому.
-_ON_LINE = re.compile(r"^(?:on|'on'|\"on\")\s*:(.*)$")
-
-#: Строка блока `on:`, объявляющая событие `pull_request` и ничего больше.
-#: `pull_request_target` не совпадает: после имени допускается только двоеточие.
-_PR_EVENT = re.compile(r"^\s+-?\s*pull_request\s*:?\s*$")
-
 
 @dataclass(frozen=True)
 class Outcome:
@@ -100,28 +92,13 @@ class Outcome:
 
 
 def triggers_on_pull_request(text: str) -> bool:
-    """Ходит ли workflow по `pull_request`.
+    """Ходит ли workflow по `pull_request` — и только по нему.
 
-    Разбирается только блок `on:` — три его законные формы: скаляр
-    (`on: pull_request`), поток (`on: [push, pull_request]`) и блок. Полного
-    разбора YAML здесь нет намеренно: гейт обходится стандартной библиотекой, а
-    зависимость сделала бы обязательную проверку заложницей сборки.
+    `pull_request_target` сюда не входит: прогоны ищутся с событием
+    `pull_request`, и прогон другого события на голове PR не появится. Сам
+    разбор блока `on:` — общий, в `workflow_on` (214).
     """
-    lines = text.splitlines()
-    for номер, строка in enumerate(lines):
-        совпадение = _ON_LINE.match(строка)
-        if совпадение is None:
-            continue
-        хвост = совпадение.group(1).split("#", 1)[0].strip()
-        if хвост:
-            return "pull_request" in re.split(r"[\s,\[\]]+", хвост)
-        for след in lines[номер + 1 :]:
-            if след.strip() and not след.startswith((" ", "\t")):
-                return False
-            if _PR_EVENT.match(след):
-                return True
-        return False
-    return False
+    return "pull_request" in workflow_on.события(text)
 
 
 def expected_workflows(root: Path, *, self_path: str = SELF_PATH) -> frozenset[str]:
