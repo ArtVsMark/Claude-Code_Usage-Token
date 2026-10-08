@@ -746,18 +746,47 @@ def check_showcase(root: Path) -> ShowcaseContract:
 CHECK_TIMEOUT = 900
 
 
+#: Коды, которыми проверка сообщает о находке. Всё прочее — «не отработала»:
+#: у `pytest` 2–5 значат прерывание, ошибку вызова или пустой набор, у `ruff`
+#: 2 — аварийный выход. Сводить их к «не ноль» значило бы читать поломку
+#: инструмента как найденный дефект (правило 039, находка #151).
+КОДЫ_НАХОДКИ = frozenset({1})
+
+#: Строка сводки `pytest -rs`: «SKIPPED [1] tests/x.py:12: причина».
+_ПРОПУСК = re.compile(r"^SKIPPED \[\d+\] (?P<где>.+)$", re.MULTILINE)
+
+
 def run_check(check: Check) -> tuple[bool, str]:
-    """Прогнать одну проверку. Вернуть «прошла ли» и её вывод."""
-    proc = subprocess.run(
-        check.argv,
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=CHECK_TIMEOUT,
-    )
-    return proc.returncode == 0, (proc.stdout + proc.stderr).strip()
+    """Прогнать одну проверку. Вернуть «прошла ли» и её вывод.
+
+    Не прошедшая проверка различает «нашла» и «не отработала»: второе
+    называется в выводе с кодом, а истёкший срок — отказом с причиной, а не
+    трейсбеком, который дал бы тот же код 1, что и находка (039).
+    """
+    try:
+        proc = subprocess.run(
+            check.argv,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=CHECK_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return False, (
+            f"не отработала: не уложилась в {CHECK_TIMEOUT} с — это зависание "
+            "или срок, а не находка"
+        )
+    вывод = (proc.stdout + proc.stderr).strip()
+    if proc.returncode not in КОДЫ_НАХОДКИ | {0}:
+        вывод = f"не отработала (код {proc.returncode}), это не находка\n{вывод}"
+    return proc.returncode == 0, вывод
+
+
+def пропуски(вывод: str) -> list[str]:
+    """Пропущенные тесты из сводки `-rs`: где и почему (040)."""
+    return [м.group("где") for м in _ПРОПУСК.finditer(вывод)]
 
 
 def current_branch() -> str:
@@ -854,6 +883,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for check in checks():
         ok, output = run_check(check)
         (passed.append(check.name) if ok else failed.append((check.name, output)))
+        # Вывод прошедшей проверки выбрасывается — кроме пропусков: тест,
+        # пропущенный на этой машине, прошедшим не является, и без имени он
+        # неотличим от отсутствующего (040).
+        for где in пропуски(output) if ok else []:
+            warned.append(f"пропущен тест: {где}")
 
     try:
         файлы = tracked_files()
