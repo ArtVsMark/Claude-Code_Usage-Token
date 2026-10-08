@@ -213,3 +213,12 @@ def test_прогон_проходит_на_целом_колесе(
 
     assert код == 0
     assert "выпуск готов" in capsys.readouterr().out
+
+
+def test_лишнего_больше_пяти_называется_число(tmp_path: Path) -> None:
+    """Пять имён — для чтения, число — целиком (016, находка #151)."""
+    много = dict(ПОЛНОЕ_КОЛЕСО, **{f"tests/test_{н}.py": "" for н in range(8)})
+
+    проблемы = release.check_wheel(_колесо(tmp_path, много), "0.1.0")
+
+    assert "и ещё 3" in проблемы[0]

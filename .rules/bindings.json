@@ -119,12 +119,12 @@
     "016": {
       "status": "active",
       "mechanism": "document",
-      "where": "scripts/preflight.py печатает охват («просмотрено N, пропущено двоичных M»); src/claude_code_usage/transcripts.py — Coverage со строками, повторами ответа и незнакомыми полями; scripts/subprocess_encoding.py и scripts/utf8_output.py — «разобрано файлов N, пропущено M» и «проверено N, не предмет M»; scripts/rules_answer.py — «записей N, с адресом M». СВЕРКА 2026-10-02 (#139, дефекты кода — #151): названное не краснеет — механизм document, а не gate.",
+      "where": "scripts/preflight.py печатает охват («просмотрено N, пропущено двоичных M»); src/claude_code_usage/transcripts.py — Coverage со строками, повторами ответа и незнакомыми полями; scripts/subprocess_encoding.py и scripts/utf8_output.py — «разобрано файлов N, пропущено M» и «проверено N, не предмет M»; scripts/rules_answer.py — «записей N, с адресом M». СВЕРКА 2026-10-02 (#139, дефекты кода — #151): названное не краснеет — механизм document, а не gate. ПОЧИНКА 2026-10-08 (обрезки из #151): текст отказа площадки в scripts/gh_rest.py режется с маркером и полной длиной (GitHubError.ПРЕДЕЛ_ТЕЛА), список лишнего в колесе в scripts/release.py называет «и ещё N» — тесты в tests/test_gh_rest_pages.py и tests/test_release.py, красные на прежнем коде. Механизм остаётся document: общего гейта на обрезку без маркера нет.",
       "holdable": "not-yet",
       "why": "На молчаливую обрезку не краснеет ничто; обрезки в дереве есть (#151).",
       "machine_half": "Гейт по форме: срез [:N] в тексте сообщения без маркера «и ещё N» — находка. Не построено.",
-      "analysed": "2026-10-02",
-      "decided": "2026-10-02"
+      "analysed": "2026-10-08",
+      "decided": "2026-10-08"
     },
     "017": {
       "status": "active",
@@ -1249,9 +1249,9 @@
     "165": {
       "status": "active",
       "mechanism": "gate",
-      "where": "scripts/preflight.py (tracked_files с -z и ScanResult с охватом), scripts/repo_links.py (tracked_files), src/claude_code_usage/transcripts.py (Coverage со строками, повторами и нечитаемыми). Правило родилось здесь: без -z проверка на секреты печатала «всё чисто», не прочитав ни одного файла с русским именем. СВЕРКА 2026-10-02 (#139, дефекты кода — #151): scripts/repo_links.py читает список с -z, но охвата не печатает, а нечитаемые файлы пропускает молча.",
-      "analysed": "2026-10-02",
-      "decided": "2026-10-02"
+      "where": "scripts/preflight.py (tracked_files с -z и ScanResult с охватом), scripts/repo_links.py (tracked_files), src/claude_code_usage/transcripts.py (Coverage со строками, повторами и нечитаемыми). Правило родилось здесь: без -z проверка на секреты печатала «всё чисто», не прочитав ни одного файла с русским именем. СВЕРКА 2026-10-02 (#139, дефекты кода — #151): scripts/repo_links.py читает список с -z, но охвата не печатает, а нечитаемые файлы пропускает молча. ПОЧИНКА 2026-10-08: нечитаемый файл в scripts/repo_links.py — находка «не прочитан, ссылки не проверены», двоичный по-прежнему пропускается законно — tests/test_repo_links.py, красный на прежнем коде. Охвата перепись ссылок по-прежнему не печатает.",
+      "analysed": "2026-10-08",
+      "decided": "2026-10-08"
     },
     "166": {
       "status": "active",
