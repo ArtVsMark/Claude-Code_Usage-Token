@@ -372,6 +372,20 @@ def test_отставание_считается_сравнением_с_вет�
     assert двойник.сравнения == ["/repos/o/r/compare/main...sha1"]
 
 
+def test_отставание_неизвестно_без_базы_и_без_числа(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Нет базы, нет головы, нет числа в ответе — «неизвестно», а не ноль (#151)."""
+    monkeypatch.setattr(gh_rest, "request", lambda *a, **k: {"ahead_by": 1})
+
+    assert merge_queue.behind_by("o/r", {"head": {"sha": "x"}}) is None
+    assert merge_queue.behind_by("o/r", {"base": {"ref": "main"}}) is None
+    assert (
+        merge_queue.behind_by("o/r", {"base": {"ref": "main"}, "head": {"sha": "x"}})
+        is None
+    )
+
+
 def test_отставший_pr_не_мержится_даже_если_clean(площадка: Any) -> None:
     """Живой дефект: без защиты ветки площадка отдаёт `clean` для отставшего PR."""
     двойник = площадка(pulls=[_pull(1, mergeable_state="clean")], behind_by=1)
