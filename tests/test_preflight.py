@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -236,3 +237,53 @@ def test_замечание_не_влияет_на_код_возврата() -> 
 def test_приставка_ветки_берётся_из_гейта_разметки() -> None:
     """Одно знание — одно место. Названное дважды, оно разойдётся молча."""
     assert preflight.branch_note(f"{check_pr_metadata.AGENT_BRANCH_PREFIX}что-то") == ""
+
+
+# ── находки #151: «не отработала» ≠ «нашла», пропуски названы ────────────
+
+
+def test_истёкший_срок_проверки_это_отказ_с_причиной(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Прежде `TimeoutExpired` ронял preflight трейсбеком с кодом 1 (039)."""
+
+    def зависла(*a: object, **k: object) -> object:
+        raise subprocess.TimeoutExpired(cmd="x", timeout=1)
+
+    monkeypatch.setattr(subprocess, "run", зависла)
+
+    ok, вывод = preflight.run_check(preflight.Check("x", ("x",)))
+
+    assert not ok
+    assert "не уложилась" in вывод
+
+
+@pytest.mark.parametrize(("код", "не_отработала"), [(1, False), (2, True), (5, True)])
+def test_код_вне_находки_называется_поломкой(
+    monkeypatch: pytest.MonkeyPatch, код: int, не_отработала: bool
+) -> None:
+    """У pytest 5 — пустой набор, у ruff 2 — авария: это не найденный дефект."""
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a, код, "вывод", ""),
+    )
+
+    ok, вывод = preflight.run_check(preflight.Check("x", ("x",)))
+
+    assert not ok
+    assert ("не отработала (код" in вывод) is не_отработала
+
+
+def test_пропуски_вынимаются_из_сводки() -> None:
+    сводка = (
+        "....s\n"
+        "SKIPPED [1] tests/test_a.py:12: история читается git'ом\n"
+        "SKIPPED [2] tests/test_b.py:3: нет bash\n"
+        "4 passed, 3 skipped\n"
+    )
+
+    assert preflight.пропуски(сводка) == [
+        "tests/test_a.py:12: история читается git'ом",
+        "tests/test_b.py:3: нет bash",
+    ]
