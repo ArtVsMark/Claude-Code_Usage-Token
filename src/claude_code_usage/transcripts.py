@@ -113,6 +113,10 @@ class Totals:
     last_ts: str = ""
     numbers: dict[str, int] = field(default_factory=dict)
     seen: set[str] = field(default_factory=set)
+    #: Сколько ответов шли без слагаемого (нет поля или не целое). Прежде такой
+    #: ответ молча вкладывал ноль — расход занижался, и об этом не знал никто
+    #: (правило 128, находка #151).
+    missing: dict[str, int] = field(default_factory=dict)
 
     def новый(self, ключи: Sequence[str]) -> bool:
         """Первый ли это раз для такого ответа.
@@ -144,6 +148,8 @@ class Totals:
             значение = usage.get(ключ)
             if isinstance(значение, int) and not isinstance(значение, bool):
                 self.numbers[имя] = self.numbers.get(имя, 0) + значение
+            else:
+                self.missing[имя] = self.missing.get(имя, 0) + 1
         return set(usage) - set(ADDENDS) - KNOWN_NOT_ADDENDS
 
 
@@ -161,7 +167,20 @@ class Coverage:
     counted: int = 0
     duplicates: int = 0
     unreadable: int = 0
+    #: Строки, разобранные, но без расхода: реплика человека, служебная запись.
+    #: Законны, но СЧИТАЮТСЯ: без них сверка «вход = выход + отброшено» не
+    #: сходилась, и потеря строки была бы неотличима от её законности (116).
+    no_usage: int = 0
     unknown_fields: set[str] = field(default_factory=set)
+    #: Ответы без слагаемого, по слагаемым — сумма по всем сессиям (128).
+    missing_addends: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def balanced(self) -> bool:
+        """Сходится ли вход с выходом: каждая строка куда-то учтена."""
+        return self.lines == (
+            self.counted + self.duplicates + self.unreadable + self.no_usage
+        )
 
     def __str__(self) -> str:
         хвост = (
@@ -170,10 +189,14 @@ class Coverage:
             if self.unknown_fields
             else ""
         )
+        if self.missing_addends:
+            хвост += ", ответов без слагаемого: " + ", ".join(
+                f"{имя} {число}" for имя, число in sorted(self.missing_addends.items())
+            )
         return (
             f"транскриптов {self.files}, строк {self.lines}, "
             f"с расходом {self.counted}, повторов ответа {self.duplicates}, "
-            f"нечитаемых {self.unreadable}{хвост}"
+            f"без расхода {self.no_usage}, нечитаемых {self.unreadable}{хвост}"
         )
 
 
@@ -251,9 +274,11 @@ def scan(paths: Iterable[Path]) -> tuple[dict[str, Totals], Coverage]:
             session = запись.get("sessionId")
             message = запись.get("message")
             if not isinstance(session, str) or not isinstance(message, dict):
+                охват.no_usage += 1
                 continue
             usage = message.get("usage")
             if not isinstance(usage, dict):
+                охват.no_usage += 1
                 continue
             ts = запись.get("timestamp")
             итог = итоги.setdefault(session, Totals(session=session))
@@ -265,4 +290,7 @@ def scan(paths: Iterable[Path]) -> tuple[dict[str, Totals], Coverage]:
             охват.unknown_fields |= итог.add(usage, ts if isinstance(ts, str) else "")
             охват.counted += 1
 
+    for итог in итоги.values():
+        for имя, число in итог.missing.items():
+            охват.missing_addends[имя] = охват.missing_addends.get(имя, 0) + число
     return итоги, охват
