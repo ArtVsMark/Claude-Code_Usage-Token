@@ -29,7 +29,7 @@ concurrency:
 jobs:
   probe:
     name: взвести, прочитать, снять
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
 
     # Тот же токен владельца, что у очереди: взвод — запись, несущая личность

@@ -93,7 +93,7 @@ concurrency:
 jobs:
   move:
     name: подвинуть очередь
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
 
     # Секрет кладётся в env, а не проверяется в `if` напрямую: контекст
