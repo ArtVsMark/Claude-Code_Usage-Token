@@ -268,15 +268,17 @@ def run(
 
 
 def fetch_runs(repo: str, sha: str) -> list[dict[str, Any]]:
-    """Прогоны на голове PR. Отдельной функцией — чтобы вердикт был чистым."""
-    ответ = gh_rest.request(
-        "GET",
+    """Прогоны на голове PR. Отдельной функцией — чтобы вердикт был чистым.
+
+    Все страницы, а не первая: прогон за сотней остался бы непрочитанным, и
+    красный среди них не попал бы в вердикт обязательной проверки (212).
+    """
+    прогоны = gh_rest.paged(
         f"/repos/{repo}/actions/runs",
-        params={"head_sha": sha, "event": "pull_request", "per_page": 100},
+        params={"head_sha": sha, "event": "pull_request"},
+        key="workflow_runs",
     )
-    if not isinstance(ответ, dict):
-        return []
-    return [r for r in ответ.get("workflow_runs", []) if isinstance(r, dict)]
+    return [r for r in прогоны if isinstance(r, dict)]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

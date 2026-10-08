@@ -1617,13 +1617,10 @@
     },
     "212": {
       "status": "active",
-      "mechanism": "none",
-      "where": "НЕ ДЕРЖИТСЯ НИЧЕМ, и нарушения живые. Обход страниц есть — paged в scripts/gh_rest.py, и через него идут три списка: задачи в scripts/schedule_alarm.py, коммиты PR и открытые PR в scripts/merge_queue.py. Одиночным запросом без названного предела читаются: прогоны на голове PR в scripts/pr_check.py (fetch_runs, per_page=100), check-runs в scripts/merge_queue.py (snapshot_for, per_page=100) и прогоны ci на main там же (main_state, per_page=20 — по смыслу «свежие N», но предел не назван). Ничто не краснеет на списочном запросе мимо paged, а сам paged молча обрезает выдачу на MAX_PAGES. Проверено перебором всех вызовов gh_rest в scripts/ и шагов .github/workflows/. Починка — #141.",
-      "holdable": "not-yet",
-      "why": "Три списочных запроса идут мимо обхода страниц.",
-      "machine_half": "Перевести их на paged и не давать paged молча обрезать на MAX_PAGES; гейт: вызов списочного адреса мимо paged — отказ. Починка — #141.",
-      "analysed": "2026-10-02",
-      "decided": "2026-10-02"
+      "mechanism": "gate",
+      "where": "tests/test_gh_rest_pages.py — литерал per_page вне scripts/gh_rest.py допустим только с названным пределом (именем константы), число в вызове — отказ; scripts/gh_rest.py paged обходит и обёрнутые списки (key=) со сверкой total_count, а потолок страниц и недобор — отказ TruncatedError, а не молча усечённый список. Переведены на обход: fetch_runs в scripts/pr_check.py, snapshot_for в scripts/merge_queue.py и цвет_проверки в scripts/automerge.py — последний гейт нашёл сам, в задаче его не было. main_state в scripts/merge_queue.py читает одну страницу намеренно, предел назван константой СВЕЖИХ_ПРОГОНОВ с причиной. Граница гейта: списочный GET без per_page вовсе (умолчание площадки — 30) он не видит; перебор всех вызовов gh_rest.request в scripts/, src/ и .claude/hooks/ 08.10 таких не нашёл — остальные GET читают одиночные объекты. Сверка с total_count ловит недобор, а не сдвиг страниц во время обхода (#141).",
+      "analysed": "2026-10-08",
+      "decided": "2026-10-08"
     },
     "213": {
       "status": "active",

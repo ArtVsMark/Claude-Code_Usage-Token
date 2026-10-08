@@ -100,15 +100,15 @@ def цвет_проверки(repo: str, sha: str) -> str:
     Берётся последний check-run с этим именем: после обновления ветки площадка
     создаёт второй комплект, и считать надо по уникальным именам (CLAUDE.md).
     """
-    ответ = gh_rest.request(
-        "GET",
+    # Все страницы: «последний» — это максимум по всем записям, а не по
+    # первой сотне (212).
+    записи = gh_rest.paged(
         f"/repos/{repo}/commits/{sha}/check-runs",
-        params={"check_name": pr_check.SELF_NAME, "per_page": 100},
+        params={"check_name": pr_check.SELF_NAME},
+        key="check_runs",
     )
     прогоны = [
-        r
-        for r in (ответ or {}).get("check_runs", [])
-        if isinstance(r, dict) and r.get("name") == pr_check.SELF_NAME
+        r for r in записи if isinstance(r, dict) and r.get("name") == pr_check.SELF_NAME
     ]
     if not прогоны:
         return "нет"

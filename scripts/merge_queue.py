@@ -80,6 +80,14 @@ EXIT_BROKEN = 2
 #: свои, и они к цвету общей ветки отношения не имеют.
 CI_WORKFLOW = "ci.yml"
 
+#: Сколько свежих прогонов `ci` на общей ветке читается — одна страница, и
+#: это предел, а не недочитанный список (212). Вопросов два: идёт ли прогон
+#: сейчас и каким кончился последний. Площадка отдаёт прогоны от новых к
+#: старым, и на оба отвечают первые записи; незавершённым за двадцатью
+#: свежими может быть только прогон, зависший на часы, — его покажет
+#: будильник расписаний, а не цвет ветки.
+СВЕЖИХ_ПРОГОНОВ = 20
+
 
 def main_state(repo: str, branch: str) -> tuple[bool, bool]:
     """Занят ли `main` прогоном и красный ли он.
@@ -100,7 +108,7 @@ def main_state(repo: str, branch: str) -> tuple[bool, bool]:
     прогоны = gh_rest.request(
         "GET",
         f"/repos/{repo}/actions/workflows/{CI_WORKFLOW}/runs",
-        params={"branch": branch, "event": "push", "per_page": 20},
+        params={"branch": branch, "event": "push", "per_page": СВЕЖИХ_ПРОГОНОВ},
     )
     список = (
         (прогоны or {}).get("workflow_runs", []) if isinstance(прогоны, dict) else []
@@ -131,11 +139,12 @@ def snapshot_for(repo: str, number: int, *, busy: bool, red: bool) -> pr_ready.S
     )
     checks: list[dict[str, Any]] = []
     if isinstance(sha, str):
-        ответ = gh_rest.request(
-            "GET", f"/repos/{repo}/commits/{sha}/check-runs", params={"per_page": 100}
+        # Все страницы: проверка за сотней осталась бы непрочитанной, и
+        # красная среди них не остановила бы мерж (212).
+        проверки = gh_rest.paged(
+            f"/repos/{repo}/commits/{sha}/check-runs", key="check_runs"
         )
-        if isinstance(ответ, dict):
-            checks = [c for c in ответ.get("check_runs", []) if isinstance(c, dict)]
+        checks = [c for c in проверки if isinstance(c, dict)]
 
     return pr_ready.Snapshot(
         pull=pull,

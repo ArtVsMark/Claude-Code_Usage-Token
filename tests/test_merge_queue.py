@@ -220,8 +220,12 @@ class ФейковаяПлощадка:
             return list(self.pulls.values())
         raise AssertionError(f"неожиданный путь: {path}")
 
-    def paged(self, path: str, *, params: Any = None) -> list[Any]:
+    def paged(
+        self, path: str, *, params: Any = None, key: str | None = None
+    ) -> list[Any]:
         ответ = self.request("GET", path, params=params)
+        if key is not None:
+            ответ = ответ.get(key) if isinstance(ответ, dict) else None
         return ответ if isinstance(ответ, list) else []
 
 

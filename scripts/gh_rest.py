@@ -168,23 +168,63 @@ def graphql(запрос: str, переменные: dict[str, Any] | None = Non
     return данные if isinstance(данные, dict) else {}
 
 
-def paged(path: str, *, params: dict[str, str | int] | None = None) -> list[Any]:
-    """Собрать все страницы списка.
+class TruncatedError(GitHubError):
+    """Список прочитан не целиком. Это отказ, а не короткий ответ.
+
+    Подкласс отказа площадки намеренно: вызывающие уже умеют с ним обходиться
+    как с «не отработало», и прочитанный наполовину список не становится у них
+    правдоподобным целым (правило 212 каталога).
+    """
+
+    def __init__(self, path: str, причина: str) -> None:
+        super().__init__("GET", path, 0, причина)
+
+
+def paged(
+    path: str,
+    *,
+    params: dict[str, str | int] | None = None,
+    key: str | None = None,
+) -> list[Any]:
+    """Собрать все страницы списка — или отказать, если целиком не вышло.
 
     Обход останавливается на неполной странице — признак последней. Потолок
     страниц не даёт зациклиться, если площадка вдруг начнёт отдавать полные
-    страницы бесконечно.
+    страницы бесконечно; упёршийся в него обход — :class:`TruncatedError`, а не
+    молча усечённый список.
+
+    ``key`` — для списков в обёртке (``{"total_count": N, key: [...]}``):
+    прогоны, проверки коммита. Собранное сверяется с ``total_count`` первой
+    страницы. Граница названа: запись, появившаяся во время обхода, сдвигает
+    страницы, и сверка числа такой сдвиг не видит — она ловит недобор, а не
+    перестановку.
     """
     собрано: list[Any] = []
+    всего: int | None = None
     for страница in range(1, MAX_PAGES + 1):
-        порция = request(
+        ответ = request(
             "GET",
             path,
             params={**(params or {}), "per_page": PER_PAGE, "page": страница},
         )
-        if not isinstance(порция, list):
+        if key is not None:
+            if not isinstance(ответ, dict):
+                break
+            if всего is None and isinstance(ответ.get("total_count"), int):
+                всего = ответ["total_count"]
+            ответ = ответ.get(key)
+        if not isinstance(ответ, list):
             break
-        собрано.extend(порция)
-        if len(порция) < PER_PAGE:
+        собрано.extend(ответ)
+        if len(ответ) < PER_PAGE:
             break
+    else:
+        raise TruncatedError(
+            path,
+            f"страниц больше {MAX_PAGES} по {PER_PAGE}: список прочитан не целиком",
+        )
+    if всего is not None and len(собрано) < всего:
+        raise TruncatedError(
+            path, f"площадка назвала {всего} записей, прочитано {len(собрано)}"
+        )
     return собрано
