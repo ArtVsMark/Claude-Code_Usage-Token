@@ -192,6 +192,55 @@ def test_правка_документов_записи_не_требует() ->
     assert not changelog.requires_entry(["area/docs", "documentation"])
 
 
+def test_черновик_и_форк_записи_не_требуют() -> None:
+    """Мягкая граница та же, что у разметки: запись доводят к готовности."""
+    assert not changelog.requires_entry(["bug"], draft=True)
+    assert not changelog.requires_entry(["enhancement"], fork=True)
+
+
+def test_прогон_решает_через_функцию(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Тот путь, которым идёт прогон: метки аргументом, решает функция."""
+    monkeypatch.setattr(
+        changelog, "ROOT", _дерево(tmp_path, {"z10.added.md": "Запись.\n\n#10\n"})
+    )
+
+    код = changelog.main(
+        [
+            "--labels",
+            "area/ci bug",
+            "--draft",
+            "false",
+            "--fork",
+            "false",
+            "--changed",
+            "src/x.py",
+        ]
+    )
+    assert код == changelog.EXIT_FAILED
+    assert "запись обязательна: да" in capsys.readouterr().out
+
+    код = changelog.main(
+        ["--labels", "area/ci bug", "--draft", "true", "--changed", "src/x.py"]
+    )
+    assert код == 0
+
+
+def test_тип_изменения_не_решается_в_прогоне() -> None:
+    """Имя типа в workflow — второй ответ на вопрос «нужна ли запись» (214)."""
+    каталог = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    находки = [
+        f"{путь.name}: {тип}"
+        for путь in sorted(каталог.glob("*.yml"))
+        for тип in sorted(changelog.BEHAVIOUR_TYPES)
+        if f" {тип} " in путь.read_text(encoding="utf-8")
+    ]
+    assert not находки, f"тип изменения разбирается прогоном: {находки}"
+
+
 # ── сборка ────────────────────────────────────────────────────────────────
 
 

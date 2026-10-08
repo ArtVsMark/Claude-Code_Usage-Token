@@ -100,30 +100,16 @@ jobs:
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "изменённых файлов: $(printf '%s' "$files" | wc -w)"
 
-      # Черновик и PR из форка проверяются мягко — по той же границе, что и у
-      # разметки: запись доводят к готовности, а внешний участник наших правил
-      # не знает.
-      - name: запись обязательна?
-        id: need
+      # Обязательна ли запись, решает `changelog.requires_entry`, а не шаг
+      # оболочки: прежде ответов было два, и тесты проверяли не тот, что
+      # работал (правило 214, #141). Черновик и форк — мягкая граница, как у
+      # разметки; это тоже решает функция.
+      - name: проверить записи
         env:
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           PR_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
-          set -euo pipefail
-          required=no
-          case " $PR_LABELS " in
-            *" bug "*|*" enhancement "*) required=yes ;;
-          esac
-          if [ "$PR_DRAFT" = "true" ] || [ "$PR_FORK" = "true" ]; then
-            required=no
-            echo "::notice::черновик или форк — запись не требуется, проверяется только язык"
-          fi
-          echo "value=$required" >> "$GITHUB_OUTPUT"
-          echo "запись обязательна: $required (метки: $PR_LABELS)"
-
-      - name: проверить записи
-        run: |
           python scripts/changelog.py \
-            ${{ steps.need.outputs.value == 'yes' && '--require-entry' || '' }} \
+            --labels "$PR_LABELS" --draft "$PR_DRAFT" --fork "$PR_FORK" \
             --changed ${{ steps.changed.outputs.files }}
