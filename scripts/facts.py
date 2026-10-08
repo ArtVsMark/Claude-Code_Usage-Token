@@ -55,6 +55,7 @@ from typing import Any
 
 import pr_check
 import preflight
+import rules_answer
 import version
 from utf8_output import force_utf8_output
 
@@ -343,35 +344,17 @@ def покрытие(root: Path) -> float | None:
 
 
 def правила(root: Path) -> dict[str, int] | None:
-    """Чем held каждое правило каталога — по ответу, который проект уже даёт.
+    """Чем держится каждое правило каталога — счётом самого гейта ответа.
 
     Раскладка сходится с общим числом: механизм называется у **действующих**
-    правил, а неприменимые и отклонённые считаются отдельно — у них механизма
-    нет по определению, и складывать их с «ничем» значило бы смешать «не наш
-    случай» с «правило принято и ничем не держится».
-    """
-    файл = root / ".rules" / "bindings.json"
-    if not файл.is_file():
-        return None
-    try:
-        записи = json.loads(файл.read_text(encoding="utf-8"))["rules"]
-    except OSError, ValueError, KeyError:
-        return None
-    if not isinstance(записи, dict):
-        return None
+    правил, а неприменимые, отклонённые и неразобранные считаются отдельно — у
+    них механизма нет по определению, и складывать их с «ничем» значило бы
+    смешать «не наш случай» с «правило принято и ничем не держится».
 
-    итог: dict[str, int] = {"total": len(записи), "not_applicable": 0, "rejected": 0}
-    for запись in записи.values():
-        статус = запись.get("status")
-        if статус == "not-applicable":
-            итог["not_applicable"] += 1
-            continue
-        if статус == "rejected":
-            итог["rejected"] += 1
-            continue
-        механизм = str(запись.get("mechanism") or "none")
-        итог[механизм] = итог.get(механизм, 0) + 1
-    return итог
+    Счёт не свой, а `rules_answer`: прежде он вёлся здесь второй копией и на
+    статусе `unreviewed` расходился с тем, что печатает preflight (197, #151).
+    """
+    return rules_answer.check_tree(root).раскладка
 
 
 def версия(root: Path) -> str | None:
