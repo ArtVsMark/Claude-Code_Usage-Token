@@ -102,6 +102,24 @@ Append-only строки сливаются без конфликтов, даж�
 отклонено и почему · нет предмета · ещё не смотрели. Правила, родившиеся здесь,
 предлагаются каталогу обратно — [`.rules/proposals.json`](.rules/proposals.json).
 
+## Установка
+
+Пакет и команда называются одинаково — `claude-code-usage-meter`. Нужен
+Python 3.14 или новее.
+
+В PyPI до `1.0` не публикуется ничего, поэтому пакет ставится колесом со
+страницы выпуска: на
+[последнем выпуске](https://github.com/ArtVsMark/Claude-Code_Usage-Token/releases/latest)
+скачайте `claude_code_usage_meter-<версия>-py3-none-any.whl` и поставьте его:
+
+```
+pip install claude_code_usage_meter-<версия>-py3-none-any.whl
+claude-code-usage-meter sample
+```
+
+Без подкоманды `claude-code-usage-meter` отказывает с кодом 2 и называет
+доступные подкоманды.
+
 ## Статус
 
 Ранняя разработка. Собрана **первая команда — `sample`**: снимает замер и

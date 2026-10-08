@@ -113,6 +113,24 @@ rejected and why · no subject here · not yet reviewed. Rules born here are
 proposed back to the catalogue in
 [`.rules/proposals.json`](.rules/proposals.json).
 
+## Installation
+
+The package and the command share one name — `claude-code-usage-meter`.
+Python 3.14 or newer is required.
+
+Nothing is published to PyPI before `1.0`, so the package is installed as a
+wheel from the release page: on the
+[latest release](https://github.com/ArtVsMark/Claude-Code_Usage-Token/releases/latest)
+download `claude_code_usage_meter-<version>-py3-none-any.whl` and install it:
+
+```
+pip install claude_code_usage_meter-<version>-py3-none-any.whl
+claude-code-usage-meter sample
+```
+
+Without a subcommand `claude-code-usage-meter` refuses with exit code 2 and
+names the available subcommands.
+
 ## Status
 
 Early development. The **first command is built — `sample`**: it takes a
