@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 import facts
+import rules_answer
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 РЕПОЗИТОРИЙ = "ArtVsMark/Claude-Code_Usage-Token"
@@ -457,3 +458,35 @@ def test_выпуск_в_фактах_серией(monkeypatch: pytest.MonkeyPat
 
     assert ф["release"] == "0.2"
     assert ф["version"].startswith(ф["release"] + ".")
+
+
+def test_раскладка_и_гейт_ответа_считают_одинаково(tmp_path: Path) -> None:
+    """Неразобранное правило — не «ничем не держится» (197, находка #151).
+
+    Прежде раскладка считалась здесь второй копией, и `unreviewed` уходило в
+    графу механизма `none`, а гейт ответа его туда не считал.
+    """
+    (tmp_path / ".rules").mkdir()
+    (tmp_path / ".rules" / "bindings.json").write_text(
+        json.dumps(
+            {
+                "schema": "1.7",
+                "rules": {
+                    "001": {"status": "unreviewed"},
+                    "002": {
+                        "status": "active",
+                        "mechanism": "none",
+                        "where": "x",
+                        "machine_half": "y",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    раскладка = facts.правила(tmp_path)
+
+    assert раскладка is not None
+    assert раскладка["unreviewed"] == 1
+    assert раскладка["none"] == rules_answer.check_tree(tmp_path).ничем == 1
