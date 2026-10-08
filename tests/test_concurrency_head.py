@@ -173,3 +173,67 @@ def test_дерево_без_предмета_отказывает() -> None:
 def test_проект_чист() -> None:
     """Гейт на самом себе: workflow проекта не должны краснеть."""
     assert concurrency_head.check_workflows(КОРЕНЬ) == []
+
+
+# ── находки #151: голова подстрокой и отмена уровня джоба ────────────────
+
+
+def test_голова_в_комментарии_не_засчитывается() -> None:
+    """`# head.sha` в хвосте строки — комментарий YAML, в группу он не входит."""
+    текст = (
+        ШАПКА + "concurrency:\n"
+        "  group: pr-${{ github.event.pull_request.number }}  # head.sha\n"
+        "  cancel-in-progress: true\n" + ХВОСТ
+    )
+    assert len(_находки(текст)) == 1
+
+
+def test_голова_вне_выражения_не_засчитывается() -> None:
+    """Буквы `head.sha` вне `${{ … }}` — часть имени, а не голова коммита."""
+    текст = (
+        ШАПКА + "concurrency:\n"
+        "  group: head.sha-${{ github.event.pull_request.number }}\n"
+        "  cancel-in-progress: true\n" + ХВОСТ
+    )
+    assert len(_находки(текст)) == 1
+
+
+def test_отмена_уровня_джоба_проверяется() -> None:
+    """У `jobs.<id>.concurrency` гонка та же, что у прогона целиком."""
+    текст = (
+        ШАПКА + "jobs:\n"
+        "  x:\n"
+        "    concurrency:\n"
+        "      group: x-${{ github.event.pull_request.number }}\n"
+        "      cancel-in-progress: true\n"
+        "    steps:\n"
+        "      - run: echo ok\n"
+    )
+    находки = concurrency_head.check_text(текст, "w.yml")
+    assert len(находки) == 1
+    assert находки[0].line == 9
+
+
+def test_отмена_уровня_джоба_с_головой_чиста() -> None:
+    текст = (
+        ШАПКА + "jobs:\n"
+        "  x:\n"
+        "    concurrency:\n"
+        "      group: x-${{ github.event.pull_request.head.sha }}\n"
+        "      cancel-in-progress: true\n"
+        "    steps:\n"
+        "      - run: echo ok\n"
+    )
+    assert _находки(текст) == []
+
+
+def test_вложенный_group_не_принимается_за_свой() -> None:
+    """Ключ глубже первого отступа под `concurrency:` — чужой смысл."""
+    текст = (
+        ШАПКА + "concurrency:\n"
+        "  group: pr-${{ github.event.pull_request.number }}\n"
+        "  cancel-in-progress: true\n"
+        "  extra:\n"
+        "    group: ${{ github.event.pull_request.head.sha }}\n" + ХВОСТ
+    )
+    assert len(_находки(текст)) == 1
