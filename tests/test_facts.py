@@ -468,7 +468,7 @@ def test_раскладка_и_гейт_ответа_считают_одинак
     (tmp_path / ".rules" / "bindings.json").write_text(
         json.dumps(
             {
-                "schema": "1.7",
+                "schema": rules_answer.СХЕМА_ОТВЕТА,
                 "rules": {
                     "001": {"status": "unreviewed"},
                     "002": {

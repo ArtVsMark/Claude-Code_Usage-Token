@@ -21,6 +21,7 @@ import pytest
 import badges
 import facts
 import preflight
+import rules_answer
 from conftest import счётная_история
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
@@ -196,7 +197,7 @@ def _контракт(
         ".rules/bindings.json",
         json.dumps(
             {
-                "schema": "1.7",
+                "schema": rules_answer.СХЕМА_ОТВЕТА,
                 "project": "Владелец/Проект",
                 "rules": {"001": {"status": "unreviewed"}},
             },
