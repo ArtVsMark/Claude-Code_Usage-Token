@@ -155,7 +155,7 @@ def snapshot_for(repo: str, number: int, *, busy: bool, red: bool) -> pr_ready.S
     )
 
 
-def behind_by(repo: str, pull: dict[str, Any]) -> int:
+def behind_by(repo: str, pull: dict[str, Any]) -> int | None:
     """На сколько коммитов ветка PR отстала от своей базы.
 
     Отдельным запросом, потому что `mergeable_state` этого не говорит: значение
@@ -163,9 +163,11 @@ def behind_by(repo: str, pull: dict[str, Any]) -> int:
     требованием актуальности. Без защиты отставший PR приходит как `clean` —
     и проверка «отстал ли» осталась бы гейтом, чей вход всегда зелёный.
 
-    Ответ площадки без `behind_by` считается «не отстал»: соврать в сторону
-    ожидания дешевле, чем в сторону мержа, но выдумывать отставание на пустом
-    месте значило бы остановить очередь на ровном месте.
+    ``None`` — отставание неизвестно: у PR нет базы или головы, или ответ
+    сравнения без числа. Прежде это засчитывалось за «не отстал», и
+    неизвестное условие становилось выполненным (правило 063, #151). Теперь
+    вердикт по нему — ждать: соврать в сторону ожидания дешевле, чем в
+    сторону мержа, а выдумывать число отставания не приходится.
     """
     сырая_база, сырая_голова = pull.get("base"), pull.get("head")
     base: dict[str, Any] = сырая_база if isinstance(сырая_база, dict) else {}
@@ -175,11 +177,11 @@ def behind_by(repo: str, pull: dict[str, Any]) -> int:
     # от того, где общая ветка **сейчас**.
     base_ref, head_sha = base.get("ref"), head.get("sha")
     if not isinstance(base_ref, str) or not isinstance(head_sha, str):
-        return 0
+        return None
 
     ответ = gh_rest.request("GET", f"/repos/{repo}/compare/{base_ref}...{head_sha}")
     значение = ответ.get("behind_by") if isinstance(ответ, dict) else None
-    return значение if isinstance(значение, int) else 0
+    return значение if isinstance(значение, int) else None
 
 
 def ensure_labels(repo: str) -> None:

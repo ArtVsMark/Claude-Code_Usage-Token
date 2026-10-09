@@ -62,8 +62,15 @@ REQUEST_TIMEOUT = 30
 class GitHubError(RuntimeError):
     """Площадка ответила отказом. Текст называет код и тело ответа."""
 
+    #: Сколько тела ответа попадает в текст отказа. Длинное тело обрезается С
+    #: МАРКЕРОМ и полной длиной: молча усечённый текст читается как целый (016).
+    ПРЕДЕЛ_ТЕЛА = 400
+
     def __init__(self, method: str, path: str, status: int, body: str) -> None:
-        super().__init__(f"{method} {path} → HTTP {status}: {body[:400]}")
+        тело = body
+        if len(body) > self.ПРЕДЕЛ_ТЕЛА:
+            тело = f"{body[: self.ПРЕДЕЛ_ТЕЛА]}… [обрезано: всего {len(body)} симв.]"
+        super().__init__(f"{method} {path} → HTTP {status}: {тело}")
         self.status = status
         self.body = body
 

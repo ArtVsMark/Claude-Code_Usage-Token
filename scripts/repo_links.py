@@ -91,7 +91,9 @@ _ДЕЙСТВИЕ = re.compile(r"^\s*-?\s*uses:\s*([\w.-]+)/([\w.-]+)@")
 
 @dataclass(frozen=True)
 class Находка:
-    """Место, где записано имя, которого у нас больше нет."""
+    """Место, где записано имя, которого у нас больше нет, — или файл,
+    который не удалось прочитать: ссылки в нём не проверены, и молчать об
+    этом значило бы выдать непроверенное за чистое (165)."""
 
     path: str
     line: int
@@ -177,12 +179,18 @@ def check_tree(
     """
     находки: list[Находка] = []
     for файл in tracked_files(root) if files is None else files:
+        путь = файл.relative_to(root).as_posix()
         try:
             текст = файл.read_text(encoding="utf-8")
-        except OSError, UnicodeDecodeError:
-            # Двоичное или нечитаемое — ссылок в нём не бывает.
+        except UnicodeDecodeError:
+            # Двоичное — ссылок в нём не бывает, пропуск законен.
             continue
-        путь = файл.relative_to(root).as_posix()
+        except OSError as exc:
+            # Нечитаемое — другое дело: ссылки в нём могли быть (#151).
+            находки.append(
+                Находка(путь, 0, f"файл не прочитан ({exc}) — ссылки не проверены")
+            )
+            continue
         находки.extend(check_text(текст, путь, адреса=адреса))
     return находки
 
