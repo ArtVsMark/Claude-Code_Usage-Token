@@ -30,7 +30,12 @@ def test_хук_подключён_рядом_со_сторожем_толчка
     команды = [h["command"] for запись in хуки["SessionStart"] for h in запись["hooks"]]
     assert any("session-start.sh" in к for к in команды)
     сторож = [h["command"] for запись in хуки["PreToolUse"] for h in запись["hooks"]]
-    assert any("push_guard.py" in к for к in сторож), "сторож толчка пропал"
+    # Страж зовётся ОБЁРТКОЙ интерпретатора планки, а не голым `python3`:
+    # системный python3 окна ниже планки, и страж в её грамматике упал бы на
+    # нём, а площадка сочла бы падение неблокирующим — толчок ушёл бы молча
+    # (правило 217, #154).
+    assert any("push_guard.sh" in к for к in сторож), "сторож толчка пропал"
+    assert not any("python3" in к for к in сторож), "страж снова зовётся python3"
 
 
 @pytest.mark.skipif(
