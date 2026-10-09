@@ -35,6 +35,12 @@ import pytest
         "git status",
         "git fetch origin main",
         "echo git push origin main",
+        # Слово `push` не подкомандой — не толчок (#173): пути файлов
+        # принимались за чужие ветки.
+        "git stash push -q README.md README.en.md",
+        "git log --grep push origin main",
+        "git -C ../клон push origin agent/работа",
+        "git -c core.quotepath=off push origin HEAD",
     ],
 )
 def test_законное_пропускается(команда: str) -> None:
@@ -64,6 +70,10 @@ def test_законное_пропускается(команда: str) -> None:
         # Толчок всех веток разом уносит и чужие.
         ("git push --all origin", "все ветки"),
         ("git push --mirror origin", "все ветки"),
+        # Глобальные опции перед подкомандой не прячут толчок (#173).
+        ("git -C ../клон push origin main", "main"),
+        ("git --git-dir=.git push origin main", "main"),
+        ("git --no-pager -c x=y push origin agent/чужая", "agent/чужая"),
     ],
 )
 def test_чужая_ветка_отвергается(команда: str, ждём: str) -> None:
@@ -79,9 +89,23 @@ def test_с_головы_main_не_толкают_никогда(команда:
     assert push_guard.чужая_ветка(команда, "main") == "main"
 
 
-def test_без_головы_не_судим() -> None:
-    """Отсоединённая голова или не репозиторий: сравнивать не с чем."""
-    assert push_guard.чужая_ветка("git push origin main", None) is None
+@pytest.mark.parametrize(
+    "команда",
+    ["git push", "git push origin main", "git push --force origin HEAD:main"],
+)
+def test_без_головы_толчок_отвергается(команда: str) -> None:
+    """Облачное окно стартует на отсоединённой голове (#186).
+
+    Прежде это читалось как «сравнивать не с чем», и в стартовом состоянии окна
+    заслон пропускал `--force origin HEAD:main` с кодом 0.
+    """
+    assert push_guard.чужая_ветка(команда, None) == push_guard.БЕЗ_ГОЛОВЫ
+
+
+@pytest.mark.parametrize("команда", ["git status", "git stash push -q a.md", "ls"])
+def test_без_головы_остальное_не_судится(команда: str) -> None:
+    """Заслон судит только толчок: остальное окно делает и без ветки."""
+    assert push_guard.чужая_ветка(команда, None) is None
 
 
 def test_неразбираемая_строка_не_судится() -> None:
