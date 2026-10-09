@@ -67,8 +67,6 @@ AttributeError: 'NoneType' object has no attribute 'strip'
 названо здесь, а не обнаружится потом.
 """
 
-from __future__ import annotations
-
 import ast
 import subprocess
 import sys

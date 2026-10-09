@@ -11,8 +11,6 @@
 Поэтому почти всё ниже — про отказы: удачный путь виден по любому прогону.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

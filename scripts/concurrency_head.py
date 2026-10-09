@@ -42,8 +42,6 @@ Workflow, который слушает `pull_request` и **отменяет** �
 * `cancel-in-progress: false` сказан вслух.
 """
 
-from __future__ import annotations
-
 import re
 import sys
 from collections.abc import Sequence

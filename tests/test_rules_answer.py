@@ -5,8 +5,6 @@
 ли адрес и существует ли он».
 """
 
-from __future__ import annotations
-
 import json
 import subprocess
 import sys

@@ -6,8 +6,6 @@
 даёт завести пятый: регулярка, узнающая событие прогона, вне него — отказ.
 """
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 

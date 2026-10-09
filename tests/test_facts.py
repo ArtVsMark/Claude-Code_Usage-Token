@@ -11,8 +11,6 @@
 «не измеряли» (правило 039 — три исхода, а не два).
 """
 
-from __future__ import annotations
-
 import json
 import subprocess
 from datetime import UTC, datetime

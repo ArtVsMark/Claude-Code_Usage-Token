@@ -6,8 +6,6 @@
 несуществующий параметр и уронила пятнадцать тестов, прежде чем это заметили.
 """
 
-from __future__ import annotations
-
 import subprocess
 from pathlib import Path
 

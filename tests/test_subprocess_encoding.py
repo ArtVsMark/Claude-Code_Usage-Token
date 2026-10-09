@@ -7,8 +7,6 @@
 гейт. Ровно эта ловушка уже была у переписи ссылок и у проверки на секреты.
 """
 
-from __future__ import annotations
-
 import subprocess
 import sys
 from pathlib import Path

@@ -11,17 +11,16 @@ SyntaxError'ом с кодом 1 — площадка считает такой 
 * без интерпретатора толчок закрыт кодом 2, а прочие команды открыты.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import shutil
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import pytest
+
+import py_style
 
 КОРЕНЬ = Path(__file__).resolve().parents[1]
 ХУКИ = КОРЕНЬ / ".claude" / "hooks"
@@ -39,11 +38,9 @@ pytestmark = pytest.mark.skipif(
 
 
 def _планка_как_tomllib(манифест: Path) -> str:
-    требование = tomllib.loads(манифест.read_text(encoding="utf-8"))["project"][
-        "requires-python"
-    ]
-    цифры = требование.lstrip(">= ").split(",")[0].split(".")
-    return f"{цифры[0]}.{цифры[1]}"
+    """Разбор на Python — единственный, гейта стиля (`py_style.планка`)."""
+    мажор, минор = py_style.планка(манифест.parent)
+    return f"{мажор}.{минор}"
 
 
 def _планка_как_floor_sh(манифест: Path) -> str:

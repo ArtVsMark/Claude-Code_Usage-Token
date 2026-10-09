@@ -51,8 +51,6 @@
 «названо ли имя из списка», а не «жив ли адрес».
 """
 
-from __future__ import annotations
-
 import os
 import re
 import subprocess

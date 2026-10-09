@@ -9,8 +9,6 @@
 гейт заведён. Поэтому неразобранный cron — отказ, а не ноль.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

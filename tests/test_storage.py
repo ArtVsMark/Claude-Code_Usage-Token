@@ -6,8 +6,6 @@ Git здесь **настоящий**, а не подделанный: пров�
 было бы гипотезой.
 """
 
-from __future__ import annotations
-
 import json
 import subprocess
 from pathlib import Path

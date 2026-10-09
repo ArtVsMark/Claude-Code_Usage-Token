@@ -31,8 +31,6 @@ bash **не раскрывается вовсе**: парсер требует A
 правило про идентификаторы, а не про язык.
 """
 
-from __future__ import annotations
-
 import re
 import sys
 from collections.abc import Sequence

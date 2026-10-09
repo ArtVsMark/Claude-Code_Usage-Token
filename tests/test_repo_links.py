@@ -1,7 +1,5 @@
 """Перепись ссылок: адрес называет нынешнее имя (переименование 2026-09-02, #56)."""
 
-from __future__ import annotations
-
 import subprocess
 import sys
 from pathlib import Path

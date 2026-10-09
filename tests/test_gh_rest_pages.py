@@ -11,8 +11,6 @@
 Число в вызове и есть «прочитали первую страницу и не сказали».
 """
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 from typing import Any

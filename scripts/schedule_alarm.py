@@ -37,8 +37,6 @@
 одним прогоном по расписанию — у которого была бы та же беда.
 """
 
-from __future__ import annotations
-
 import argparse
 import sys
 from collections.abc import Sequence

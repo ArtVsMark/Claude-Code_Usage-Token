@@ -54,8 +54,6 @@ issue, и это его работа, а не этого гейта.
 существует ли он», а не «делает ли названное то, что обещано».
 """
 
-from __future__ import annotations
-
 import json
 import re
 import sys

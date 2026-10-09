@@ -5,8 +5,6 @@
 потому что заметить было нечем — цифры не было нигде.
 """
 
-from __future__ import annotations
-
 import subprocess
 import sys
 from pathlib import Path

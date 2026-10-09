@@ -6,8 +6,6 @@
 трогать чужой pull request с совпавшим заголовком, будить на отмену.
 """
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 from typing import Any

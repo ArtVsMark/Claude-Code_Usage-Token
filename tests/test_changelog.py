@@ -7,8 +7,6 @@
 Поэтому на каждую находку — по два теста.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

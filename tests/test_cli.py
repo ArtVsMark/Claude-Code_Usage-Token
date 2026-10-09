@@ -9,8 +9,6 @@
 в этот момент. Нереализованными остались `report` и `calibrate`.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from claude_code_usage import ISSUES_URL, cli

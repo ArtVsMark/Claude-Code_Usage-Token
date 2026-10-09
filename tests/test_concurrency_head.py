@@ -6,8 +6,6 @@
 краснеет на законном, выключают первой же правкой вместе со всем остальным.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import concurrency_head

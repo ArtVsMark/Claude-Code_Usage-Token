@@ -41,8 +41,6 @@ Ruleset на общей ветке требует проверки **по име
 вопрос: все ли прогоны на голове PR прошли.
 """
 
-from __future__ import annotations
-
 import argparse
 import pathlib
 import sys

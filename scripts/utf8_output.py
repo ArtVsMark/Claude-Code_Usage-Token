@@ -65,8 +65,6 @@ UTF-8 первым делом» нечем соблюдать вниманием
 `tests/test_utf8_output_copies.py` (правило 214, #141).
 """
 
-from __future__ import annotations
-
 import ast
 import re
 import sys

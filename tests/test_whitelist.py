@@ -12,8 +12,6 @@
 Поэтому проверяется и то, и другое — на подделанном реестре.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import pytest

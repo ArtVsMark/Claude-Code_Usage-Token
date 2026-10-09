@@ -5,8 +5,6 @@
 запас, — не только то, что переполнение ловится.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import doc_limits

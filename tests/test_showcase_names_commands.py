@@ -12,8 +12,6 @@
 Это остаётся приёмке; здесь держится то, что решается данными целиком.
 """
 
-from __future__ import annotations
-
 import re
 import tomllib
 from pathlib import Path

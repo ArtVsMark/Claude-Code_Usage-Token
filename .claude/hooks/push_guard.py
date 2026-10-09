@@ -37,8 +37,6 @@ Code и вызывается им. Человек, толкающий из те�
 агентский: ветку `agent/**` ведёт окно, и перезапуск окна не делает её ничьей.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import shlex
@@ -67,7 +65,7 @@ def текущая_ветка() -> str | None:
             timeout=LOCAL_TIMEOUT,
             env={"GIT_TERMINAL_PROMPT": "0", "PATH": "/usr/bin:/bin:/usr/local/bin"},
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     имя = итог.stdout.strip()
     return имя if итог.returncode == 0 and имя and имя != "HEAD" else None
@@ -194,7 +192,7 @@ def _затронутая(слова: list[str], голова: str) -> str | Non
 def main() -> int:
     try:
         событие = json.load(sys.stdin)
-    except (ValueError, OSError):
+    except ValueError, OSError:
         return 0
 
     вход = событие.get("tool_input")

@@ -26,8 +26,6 @@
 отказ до первого обращения к GraphQL. Снятие стоит в `finally`.
 """
 
-from __future__ import annotations
-
 import argparse
 import pathlib
 import sys
