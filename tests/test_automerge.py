@@ -5,8 +5,6 @@
 которого обязательная проверка не красная, и оставлять взвод после себя.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import pytest

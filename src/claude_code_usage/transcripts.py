@@ -67,8 +67,6 @@
 источника, в котором повторов не было.
 """
 
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field

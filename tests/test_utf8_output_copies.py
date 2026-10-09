@@ -7,8 +7,6 @@
 документации. Документация разная законно — перенос строк в ней свой.
 """
 
-from __future__ import annotations
-
 import ast
 from pathlib import Path
 

@@ -7,8 +7,6 @@
 проверок в CLAUDE.md и заведены.
 """
 
-from __future__ import annotations
-
 import shutil
 import subprocess
 from pathlib import Path

@@ -11,8 +11,6 @@
 точкой конфликта независимо от того, насколько независимы изменения.
 """
 
-from __future__ import annotations
-
 import json
 import subprocess
 from pathlib import Path
@@ -208,6 +206,15 @@ def _контракт(
     # Каталог записей журнала — по той же причине: без него проверка журнала
     # отказывает, потому что собирать заметки выпуска было бы не из чего.
     (каталог / "changelog.d").mkdir(exist_ok=True)
+    # Манифест на планке — по той же причине: гейт стиля без него отказывает,
+    # потому что сверять стиль не с чем (#154).
+    манифест = каталог / "pyproject.toml"
+    if not манифест.exists():
+        манифест.write_text(
+            '[project]\nname = "x"\nrequires-python = ">=3.14"\n'
+            '[tool.ruff]\ntarget-version = "py314"\n',
+            encoding="utf-8",
+        )
     return каталог
 
 

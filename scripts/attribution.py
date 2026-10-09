@@ -32,8 +32,6 @@ Opus 5». Разбор по способу слияния объяснил за�
 держит то же правило так же.
 """
 
-from __future__ import annotations
-
 import re
 import subprocess
 import sys

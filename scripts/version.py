@@ -59,8 +59,6 @@ pull` мержем уводит пришедшее с площадки во вт
 [Engineering-Incidents-Playbook]: https://github.com/ArtVsMark/Engineering-Incidents-Playbook
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import subprocess

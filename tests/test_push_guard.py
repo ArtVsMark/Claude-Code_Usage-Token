@@ -8,8 +8,6 @@
 Судить по первому слову строки значило бы не судить вовсе.
 """
 
-from __future__ import annotations
-
 import push_guard
 import pytest
 

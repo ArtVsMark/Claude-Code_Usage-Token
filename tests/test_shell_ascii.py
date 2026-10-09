@@ -8,8 +8,6 @@
 Первый способ — падение с кодом 127 — чинится сам собой: красное видно.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import shell_ascii

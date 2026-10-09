@@ -26,8 +26,6 @@
 репозиторием значило бы заводить второй способ спросить то же самое.
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 import sys

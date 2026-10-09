@@ -27,8 +27,6 @@ Windows она не UTF-8, и дальше по-разному:
 возврата верный, а что делать дальше — непонятно.
 """
 
-from __future__ import annotations
-
 import sys
 
 

@@ -16,12 +16,11 @@
 дешевле двух прогонов, а «первая красная» скрывает вторую.
 """
 
-from __future__ import annotations
-
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -38,6 +37,7 @@ import concurrency_head
 import doc_limits
 import exclusive_claims
 import facts
+import py_style
 import repo_links
 import rules_answer
 import shell_ascii
@@ -983,6 +983,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         failed.append((имя_кодировок, "\n".join(str(н) for н in кодировки.находки)))
     else:
         passed.append(имя_кодировок)
+
+    # Стиль на планке (217, #154): код написан на её версии, а не только
+    # объявлен на ней; исключений по файлам нет.
+    try:
+        стиль = py_style.check_tree(ROOT, files=файлы)
+    except (OSError, ValueError, KeyError, tokenize.TokenError) as exc:
+        failed.append(("стиль на планке", f"не отработал: {exc}"))
+    else:
+        имя_стиля = (
+            f"стиль на планке {стиль.планка[0]}.{стиль.планка[1]} "
+            f"(файлов {стиль.файлов})"
+        )
+        if стиль.находки:
+            failed.append((имя_стиля, "\n".join(str(н) for н in стиль.находки)))
+        else:
+            passed.append(имя_стиля)
 
     сведения = version.counted(ROOT)
     if сведения is None:

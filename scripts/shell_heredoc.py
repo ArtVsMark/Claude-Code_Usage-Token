@@ -22,8 +22,6 @@ heredoc с НЕзакавыченным разделителем — `<<EOF` в�
 и граница названа здесь.
 """
 
-from __future__ import annotations
-
 import re
 import sys
 from collections.abc import Sequence

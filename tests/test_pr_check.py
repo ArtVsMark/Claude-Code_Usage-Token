@@ -8,8 +8,6 @@ ruleset пропустит то, ради запрета чего он вклю�
 по любому прогону, а отказы не видны никогда, пока их не подделать.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 

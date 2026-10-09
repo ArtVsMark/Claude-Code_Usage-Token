@@ -1,7 +1,5 @@
 """Разбор выгрузки реестра — по замеру живого ответа, а не по спецификации (#2)."""
 
-from __future__ import annotations
-
 import json
 from typing import Any
 

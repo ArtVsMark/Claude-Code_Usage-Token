@@ -39,8 +39,6 @@ PR не «готов», он «обнови и приходи».
 именно отказы.
 """
 
-from __future__ import annotations
-
 import pathlib
 import sys
 from dataclasses import dataclass, field

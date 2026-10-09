@@ -37,8 +37,6 @@
 Перепись сужает щель до одного действия, но не закрывает её.
 """
 
-from __future__ import annotations
-
 import json
 import sys
 from collections.abc import Sequence

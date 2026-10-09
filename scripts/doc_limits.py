@@ -17,8 +17,6 @@
 машине не видно, и это здесь названо, а не обнаружится потом.
 """
 
-from __future__ import annotations
-
 import re
 import sys
 from collections.abc import Sequence

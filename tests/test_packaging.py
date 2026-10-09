@@ -5,8 +5,6 @@
 иначе обнаруживается поздно и не там, где сделана.
 """
 
-from __future__ import annotations
-
 import importlib
 import re
 import tomllib

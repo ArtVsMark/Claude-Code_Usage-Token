@@ -16,8 +16,6 @@
 из них (`|| true` в конце), и такая сверка осталась бы зелёной.
 """
 
-from __future__ import annotations
-
 import re
 import shutil
 import subprocess

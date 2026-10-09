@@ -33,8 +33,6 @@
 это ожидаемое поведение, а не дефект.
 """
 
-from __future__ import annotations
-
 import argparse
 import pathlib
 import re

@@ -35,8 +35,6 @@
 расход учтён не полностью, — её уже не починить.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from . import ISSUES_URL

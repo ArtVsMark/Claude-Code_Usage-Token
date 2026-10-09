@@ -10,8 +10,6 @@
 обязан стоять в реестре площадки явно — реестр сильнее импорта.
 """
 
-from __future__ import annotations
-
 import ast
 import re
 from pathlib import Path
