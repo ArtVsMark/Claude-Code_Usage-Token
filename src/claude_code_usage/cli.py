@@ -51,6 +51,18 @@ DEFAULT_INTERVAL_MINUTES = 15
 
 _ISSUE_BY_COMMAND = {"report": 1, "calibrate": 1}
 
+#: Назначение команды одной строкой — для общей справки и справки подкоманды.
+#: Источник один: подпарсеры берут строку отсюда, и разойтись им не с чем.
+PURPOSE: dict[str, str] = {
+    "sample": "снять замер и дописать в хранилище",
+    "probe": "накопительный ли usage реестра: сравнить две выгрузки (#101)",
+    "report": "расход за окно, светофор, время сброса, остаток",
+    "calibrate": "пересчитать шкалу по накопленным переходам",
+}
+
+#: Флаги общей справки. Подкомандам справку отдаёт их собственный `argparse`.
+_HELP_FLAGS = frozenset({"-h", "--help"})
+
 
 def _known() -> str:
     return ", ".join(COMMANDS)
@@ -311,7 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="claude-code-usage-meter")
     подкоманды = parser.add_subparsers(dest="command")
 
-    замер = подкоманды.add_parser("sample", help="снять замер и дописать в хранилище")
+    замер = подкоманды.add_parser("sample", help=PURPOSE["sample"])
     замер.add_argument(
         "--registry",
         metavar="ФАЙЛ",
@@ -346,10 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="показать строки, ничего не записывая"
     )
 
-    проба = подкоманды.add_parser(
-        "probe",
-        help="накопительный ли usage реестра: сравнить две выгрузки (#101)",
-    )
+    проба = подкоманды.add_parser("probe", help=PURPOSE["probe"])
     проба.add_argument(
         "--before", required=True, metavar="ФАЙЛ", help="выгрузка реестра ДО"
     )
@@ -357,6 +366,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--after", required=True, metavar="ФАЙЛ", help="выгрузка реестра ПОСЛЕ"
     )
     return parser
+
+
+def usage_text() -> str:
+    """Общая справка: каждая команда с назначением; нереализованная названа."""
+    ширина = max(map(len, COMMANDS))
+    строки = [
+        "использование: claude-code-usage-meter <команда> [параметры]",
+        "",
+        "команды:",
+    ]
+    for имя in COMMANDS:
+        пометка = " (ещё не реализована)" if имя in _ISSUE_BY_COMMAND else ""
+        строки.append(f"  {имя:<{ширина}}  {PURPOSE[имя]}{пометка}")
+    строки += ["", "справка команды: claude-code-usage-meter <команда> --help"]
+    return "\n".join(строки)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -370,6 +394,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
 
     имя = args[0]
+    if имя in _HELP_FLAGS:
+        # Первое, что наберёт поставивший пакет (#174): прежде оно отвергалось
+        # как неизвестная команда.
+        print(usage_text())
+        return 0
     if имя in _ISSUE_BY_COMMAND:
         print(
             f"команда {имя!r} ещё не реализована: каркас проекта заведён, "
