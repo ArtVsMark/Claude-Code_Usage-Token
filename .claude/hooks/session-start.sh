@@ -32,15 +32,12 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 cd "${CLAUDE_PROJECT_DIR:-}" || { warn "нет каталога проекта"; exit 0; }
 
-floor=$(python3 -c '
-import re, sys, tomllib
-with open("pyproject.toml", "rb") as fh:
-    spec = tomllib.load(fh)["project"]["requires-python"]
-m = re.fullmatch(r"\s*>=\s*(\d+)\.(\d+)\s*", spec)
-if m is None:
-    sys.exit(f"планка не вида >=X.Y: {spec!r}")
-print(f"{m[1]}.{m[2]}")
-') || { warn "планка requires-python не прочитана"; exit 0; }
+# Планка — тем же разбором, что у обёртки стража, и без Python: системный
+# python3 окна ниже планки, и разбор на нём держал бы хуки в его грамматике
+# (правило 217, #154). Один разбор на оба хука — .claude/hooks/floor.sh.
+. "$(dirname "$0")/floor.sh"
+floor=$(planka_floor pyproject.toml)
+[ -n "$floor" ] || { warn "планка requires-python не прочитана"; exit 0; }
 
 if ! command -v "python$floor" >/dev/null 2>&1; then
   { python3 -m venv /opt/uv \
