@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from claude_code_usage import cli
+from claude_code_usage import ISSUES_URL, cli
 
 
 def test_без_команды_отказ_с_перечнем(capsys: pytest.CaptureFixture[str]) -> None:
@@ -37,6 +37,9 @@ def test_известная_команда_отказывает_называя_�
     err = capsys.readouterr().err
     assert name in err
     assert "не реализована" in err
+    # Полным адресом, а не «issue #1»: у поставившего пакет трекера под рукой
+    # нет (076, находка #151).
+    assert f"{ISSUES_URL}/" in err
 
 
 def test_неизвестная_команда_отличима_от_нереализованной(

@@ -44,6 +44,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from . import whitelist
+
 #: Где в живой записи лежат оба нужных блока.
 NESTED_UNDER = "external_metadata"
 
@@ -72,6 +74,13 @@ class Reading:
     records: list[Record]
     truncated: bool
     skipped: int
+    #: Записи с расходом, но без полного состояния лимита: нет типа, статуса или
+    #: срока сброса. Пропускаются и СЧИТАЮТСЯ — отдельно от записей без
+    #: расхода, потому что расход у них есть и в сумму он не вошёл. Обрывать
+    #: из-за одной такой записи весь замер — дороже: реестр мог законно отдать
+    #: сессию до первого ответа, и замер перестал бы писаться совсем (решение
+    #: владельца по #182; правила 045, 048, находка #151).
+    no_light: int = 0
 
 
 def _unwrap(payload: Any) -> list[Any]:
@@ -107,6 +116,7 @@ def records(payload: Any) -> Reading:
     сырые = _unwrap(payload)
     собранные: list[Record] = []
     пропущено = 0
+    без_светофора = 0
     for запись in сырые:
         if not isinstance(запись, dict):
             пропущено += 1
@@ -123,7 +133,15 @@ def records(payload: Any) -> Reading:
         ):
             пропущено += 1
             continue
+        if any(limit.get(поле) in (None, "") for поле in whitelist.LIMIT_FIELDS):
+            без_светофора += 1
+            continue
         собранные.append(
             Record(session=номер, payload={USAGE_KEY: usage, LIMIT_KEY: limit})
         )
-    return Reading(records=собранные, truncated=_truncated(payload), skipped=пропущено)
+    return Reading(
+        records=собранные,
+        truncated=_truncated(payload),
+        skipped=пропущено,
+        no_light=без_светофора,
+    )

@@ -145,6 +145,23 @@ def test_неполный_usage_роняет_замер(
     assert storage.read_rows(склад) == []
 
 
+def test_запись_без_светофора_не_обрывает_замер(
+    tmp_path: Path, склад: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Решение по #182: пропуск со счётом, а не обрыв всего замера."""
+    без_светофора = json.loads(json.dumps(ЗАПИСЬ))
+    без_светофора["id"] = "session_без_светофора"
+    без_светофора["external_metadata"]["rate_limit_info"] = {}
+    файл = tmp_path / "смесь.json"
+    файл.write_text(json.dumps([ЗАПИСЬ, без_светофора]), encoding="utf-8")
+
+    assert cli.main(_замер(файл, склад, "--dry-run")) == 0
+
+    вывод = capsys.readouterr().out
+    assert "без состояния лимита 1" in вывод
+    assert "НЕ вошёл" in вывод
+
+
 def test_ни_одной_сессии_с_расходом_это_отказ(
     tmp_path: Path, склад: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

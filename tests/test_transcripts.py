@@ -304,3 +304,47 @@ def test_запись_без_ключей_считается_а_не_теряе�
 
     assert итоги[ЖИВАЯ_ЗАПИСЬ["sessionId"]].messages == 2
     assert охват.duplicates == 0
+
+
+# ── находки #151: вход сходится с выходом, пропуск слагаемого виден ──────
+
+
+def test_строки_без_расхода_считаются_и_охват_сходится(tmp_path: Path) -> None:
+    """Вход = выход + отброшено: каждая строка куда-то учтена (116)."""
+    реплика = {"type": "user", "sessionId": "s", "message": {"role": "user"}}
+    служебная = {"type": "summary"}
+    _файл(
+        tmp_path, "a.jsonl", [ЖИВАЯ_ЗАПИСЬ, ЖИВАЯ_ЗАПИСЬ, реплика, служебная, "мусор"]
+    )
+
+    _, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert охват.no_usage == 2
+    assert охват.balanced, str(охват)
+    assert "без расхода 2" in str(охват)
+
+
+def test_ответ_без_слагаемого_считается_а_не_ноль(tmp_path: Path) -> None:
+    """Прежде пропущенное слагаемое молча вкладывало ноль (128)."""
+    без_записи_кэша = _другой_ответ()
+    сообщение = dict(ЖИВАЯ_ЗАПИСЬ["message"], id="msg_второй")
+    сообщение["usage"] = {
+        к: з
+        for к, з in ЖИВАЯ_ЗАПИСЬ["message"]["usage"].items()
+        if к != "cache_creation_input_tokens"
+    }
+    без_записи_кэша["message"] = сообщение
+    _файл(tmp_path, "a.jsonl", [ЖИВАЯ_ЗАПИСЬ, без_записи_кэша])
+
+    _, охват = transcripts.scan(transcripts.transcript_files(tmp_path))
+
+    assert охват.missing_addends == {"cache_write": 1}
+    assert "ответов без слагаемого: cache_write 1" in str(охват)
+
+
+def test_слагаемого_не_было_вовсе_в_замере_none_а_не_ноль() -> None:
+    """Ноль утверждал бы «расхода не было», а это неизвестно (128)."""
+    замер = whitelist.build_transcript_sample({"input": 1}, ts="t", session_id="s")
+
+    assert замер["input"] == 1
+    assert замер["output"] is None

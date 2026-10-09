@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -64,10 +65,39 @@ def test_плоская_форма_из_спецификации_тоже_при
     плоская = {
         "id": "s1",
         "usage": {"input_tokens": 1},
-        "rate_limit_info": {"status": "allowed"},
+        # Светофор полный: запись без него пропускается и считается (#182), а
+        # тест — про форму выгрузки, а не про полноту.
+        "rate_limit_info": {
+            "rateLimitType": "five_hour",
+            "resetsAt": 1788370800,
+            "status": "allowed",
+        },
     }
 
     assert registry.records([плоская]).records[0].session == "s1"
+
+
+@pytest.mark.parametrize(
+    "светофор",
+    [
+        {},
+        {"rateLimitType": "five_hour", "resetsAt": 1788370800},
+        {"rateLimitType": "five_hour", "resetsAt": 1788370800, "status": None},
+    ],
+)
+def test_запись_без_светофора_пропускается_и_считается(
+    светофор: dict[str, Any],
+) -> None:
+    """Одна такая запись не обрывает замер, но и в сумму не входит молча (#182)."""
+    без_светофора = json.loads(json.dumps(ЖИВАЯ_ЗАПИСЬ))
+    без_светофора["id"] = "session_без_светофора"
+    без_светофора["external_metadata"]["rate_limit_info"] = светофор
+
+    чтение = registry.records([ЖИВАЯ_ЗАПИСЬ, без_светофора])
+
+    assert [з.session for з in чтение.records] == [ЖИВАЯ_ЗАПИСЬ["id"]]
+    assert чтение.no_light == 1
+    assert чтение.skipped == 0
 
 
 @pytest.mark.parametrize(

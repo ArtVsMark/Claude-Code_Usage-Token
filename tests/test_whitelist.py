@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from claude_code_usage import whitelist
+from claude_code_usage import ISSUES_URL, whitelist
 
 
 def _сессия(**правки: Any) -> dict[str, Any]:
@@ -275,3 +275,31 @@ def test_у_транскриптной_строки_полноты_нет() -> N
     )
 
     assert not (whitelist.SNAPSHOT_FIELDS & set(замер))
+
+
+# ── находки #151: светофор держится полнотой ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "светофор",
+    [
+        {},
+        {"rateLimitType": "seven_day", "resetsAt": 1787731200},
+        {"rateLimitType": "seven_day", "resetsAt": 1787731200, "status": None},
+    ],
+)
+def test_неполный_светофор_замер_не_пишет(светофор: dict[str, Any]) -> None:
+    """Состояние лимита — вход калибровки (045, 048).
+
+    Прежде пустой `rate_limit_info` давал строку с `None` в состоянии лимита.
+    """
+    with pytest.raises(ValueError, match="rate_limit_info"):
+        _замер(rate_limit_info=светофор)
+
+
+def test_отказ_по_незнакомому_полю_ведёт_по_полному_адресу() -> None:
+    """У поставившего пакет нет ни `src/`, ни трекера под рукой (076)."""
+    отказ = str(whitelist.UnknownUsageFieldError(["quantum"]))
+
+    assert f"{ISSUES_URL}/7" in отказ
+    assert "src/" not in отказ

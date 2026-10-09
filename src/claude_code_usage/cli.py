@@ -30,8 +30,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from . import ISSUES_URL, registry, storage, transcripts, whitelist
 from . import probe as probe_mod
-from . import registry, storage, transcripts, whitelist
 from .output import force_utf8_output
 
 #: Команды из ``docs/spec.md``, § «Что инструмент делает».
@@ -80,7 +80,7 @@ def rows_from_registry(payload: Any, *, ts: str) -> tuple[list[dict[str, Any]], 
     # Сколько записей БЫЛО в выгрузке, а не сколько дало расход: мостовые окна
     # без блока usage тоже существуют, и разница между этим числом и числом
     # строк в файле — их количество.
-    всего = len(чтение.records) + чтение.skipped
+    всего = len(чтение.records) + чтение.skipped + чтение.no_light
     строки = [
         whitelist.build_sample(
             запись.payload,
@@ -91,7 +91,15 @@ def rows_from_registry(payload: Any, *, ts: str) -> tuple[list[dict[str, Any]], 
         )
         for запись in чтение.records
     ]
-    охват = f"реестр: сессий с расходом {len(строки)}, без расхода {чтение.skipped}"
+    охват = (
+        f"реестр: сессий с расходом {len(строки)}, без расхода {чтение.skipped}, "
+        f"без состояния лимита {чтение.no_light}"
+    )
+    if чтение.no_light:
+        охват += (
+            " — их расход в замер НЕ вошёл: точка без светофора читалась бы как "
+            "состояние лимита, которого не было"
+        )
     if чтение.truncated:
         охват += (
             "; ВЫГРУЗКА НЕПОЛНАЯ — реестр сообщил, что записи кончились не все, "
@@ -367,7 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if имя in _ISSUE_BY_COMMAND:
         print(
             f"команда {имя!r} ещё не реализована: каркас проекта заведён, "
-            f"поведение — нет (см. issue #{_ISSUE_BY_COMMAND[имя]})",
+            f"поведение — нет (см. {ISSUES_URL}/{_ISSUE_BY_COMMAND[имя]})",
             file=sys.stderr,
         )
         return EXIT_USAGE
